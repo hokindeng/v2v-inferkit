@@ -1,0 +1,12 @@
+# run outputs
+outputs/
+questions/
+
+# python
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# secrets
+.env
