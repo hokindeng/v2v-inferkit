@@ -42,9 +42,9 @@ env.template.
 
 ```bash
 python3 run.py --list-models                     # entry shows up
-python3 run.py --model my-model-v2v --questions-dir examples/sample_task \
+python3 run.py --model my-model-v2v --questions-dir examples \
     --output-dir /tmp/out --dry-run              # wiring
-python3 run.py --model my-model-v2v --questions-dir examples/sample_task \
+python3 run.py --model my-model-v2v --questions-dir examples \
     --output-dir /tmp/out                        # one real call (costs money)
 ```
 

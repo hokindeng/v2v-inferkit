@@ -24,7 +24,7 @@ pip install -e .
 cp env.template .env        # fill in the keys you need
 python3 run.py --list-models
 python3 run.py --model runway-aleph-v2v \
-    --questions-dir examples/sample_task --output-dir ./outputs
+    --questions-dir examples --output-dir ./outputs
 ```
 
 Add `--dry-run` to see the planned jobs without calling any API.
