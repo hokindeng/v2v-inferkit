@@ -2,13 +2,15 @@
 Base classes for v2v-inferkit model wrappers.
 
 Provides abstract interfaces to ensure consistency across all video generation
-models. Ported from VBVR-InferKit; the per-model venv interpreter helper was
-removed because every model in this kit is a commercial API.
+models. Ported from VBVR-InferKit. The per-model venv interpreter helper is
+back (it was removed while this kit was API-only) — open-source model wrappers
+use it to locate their envs/<model>/bin/python.
 """
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Union, Optional
 from pathlib import Path
+import sys
 
 
 class ModelWrapper(ABC):
@@ -32,6 +34,28 @@ class ModelWrapper(ABC):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True, parents=True)
         self.kwargs = kwargs
+
+        # v2v-inferkit root directory (repo root containing envs/, weights/)
+        self.kit_root = Path(__file__).parent.parent.parent
+
+    def get_model_python_interpreter(self, model_id: Optional[str] = None) -> str:
+        """
+        Get the Python interpreter path for the model-specific virtual environment.
+
+        Args:
+            model_id: Model identifier (defaults to self.model)
+
+        Returns:
+            Path to model-specific Python interpreter, falls back to system Python if not found
+        """
+        if model_id is None:
+            model_id = self.model
+
+        model_venv_python = self.kit_root / "envs" / model_id / "bin" / "python"
+
+        if model_venv_python.exists():
+            return str(model_venv_python)
+        return sys.executable
 
     @abstractmethod
     def generate(

@@ -1,11 +1,16 @@
-"""v2v-inferkit inference runner — direct-import dispatch for API models.
+"""v2v-inferkit inference runner.
 
-Slimmed from VBVR-InferKit's runner: every model in this kit is a commercial
-API, so the per-model venv + subprocess path was removed. Wrappers are loaded
-dynamically from MODEL_CATALOG and called in-process.
+Two dispatch paths, same as upstream VBVR-InferKit:
+- Commercial API models: wrapper loaded from MODEL_CATALOG, called in-process.
+- Open-source models: if envs/<venv_id>/bin/python exists, inference runs in a
+  subprocess inside that model-specific venv via models/_subprocess_worker.py
+  (heavy deps like torch/diffusers stay out of the core process).
 """
 
 import importlib
+import json
+import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Type, Union
@@ -13,8 +18,138 @@ from typing import Any, Dict, Optional, Type, Union
 from .MODEL_CATALOG import AVAILABLE_MODELS, MODEL_FAMILIES
 from ..models.base import ModelWrapper
 
+# Path to the subprocess worker script
+_WORKER_SCRIPT = Path(__file__).parent.parent / "models" / "_subprocess_worker.py"
+
+# v2v-inferkit root directory
+_KIT_ROOT = Path(__file__).parent.parent.parent
 _UNKNOWN_DOMAIN = "unknown_task"
 _UNKNOWN_TASK_ID = "unknown"
+
+
+def _json_safe_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    """Return kwargs converted to JSON-safe values."""
+    serializable_kwargs: Dict[str, Any] = {}
+    for key, value in kwargs.items():
+        try:
+            json.dumps(value, default=str)
+            serializable_kwargs[key] = value
+        except (TypeError, ValueError):
+            serializable_kwargs[key] = str(value)
+    return serializable_kwargs
+
+
+def _build_failed_result(
+    model_name: str,
+    start_time: float,
+    error: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Standardize failed subprocess result payloads."""
+    return {
+        "success": False,
+        "video_path": None,
+        "error": error,
+        "duration_seconds": time.time() - start_time,
+        "generation_id": None,
+        "model": model_name,
+        "status": "failed",
+        "metadata": metadata or {},
+    }
+
+
+def _get_model_venv_python(model_name: str) -> Optional[str]:
+    """Get the venv Python path for a model, or None if no venv exists."""
+    # Check catalog for venv_id override, otherwise use model_name
+    config = AVAILABLE_MODELS.get(model_name, {})
+    venv_id = config.get("venv_id", model_name)
+    venv_python = _KIT_ROOT / "envs" / venv_id / "bin" / "python"
+    if venv_python.exists():
+        return str(venv_python)
+    return None
+
+
+def _run_via_subprocess(
+    model_name: str,
+    venv_python: str,
+    image_path: Optional[Union[str, Path]],
+    text_prompt: str,
+    output_dir: str,
+    **kwargs
+) -> Dict[str, Any]:
+    """Run model inference in a subprocess using the model's venv Python."""
+    start_time = time.time()
+
+    serializable_kwargs = _json_safe_kwargs(kwargs)
+
+    cmd = [
+        venv_python,
+        str(_WORKER_SCRIPT),
+        "--model-name", model_name,
+        "--prompt", text_prompt,
+        "--output-dir", output_dir,
+        "--kwargs-json", json.dumps(serializable_kwargs, default=str),
+    ]
+    if image_path is not None:
+        cmd += ["--image-path", str(image_path)]
+
+    print(f"[subprocess] Running {model_name} with venv: {venv_python}")
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(_KIT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=7200,  # 2 hour timeout
+        )
+
+        stdout = result.stdout
+        stderr = result.stderr
+
+        if stderr:
+            # Print stderr for debugging (model loading progress, warnings, etc.)
+            for line in stderr.strip().split("\n")[-20:]:
+                print(f"  [stderr] {line}")
+
+        # Find the result JSON in stdout
+        parsed_result = None
+        for line in stdout.split("\n"):
+            if line.startswith("__V2V_RESULT__"):
+                json_str = line[len("__V2V_RESULT__"):]
+                parsed_result = json.loads(json_str)
+                break
+
+        if parsed_result is not None:
+            return parsed_result
+
+        # No result marker found - check return code
+        if result.returncode != 0:
+            return _build_failed_result(
+                model_name=model_name,
+                start_time=start_time,
+                error=f"Subprocess failed (exit {result.returncode}): {stderr[-500:] if stderr else 'no stderr'}",
+                metadata={"stdout": stdout[-500:] if stdout else ""},
+            )
+
+        return _build_failed_result(
+            model_name=model_name,
+            start_time=start_time,
+            error=f"No result marker in output. stdout: {stdout[-500:]}",
+        )
+
+    except subprocess.TimeoutExpired:
+        return _build_failed_result(
+            model_name=model_name,
+            start_time=start_time,
+            error="Subprocess timed out (2 hours)",
+        )
+    except Exception as e:
+        return _build_failed_result(
+            model_name=model_name,
+            start_time=start_time,
+            error=f"Subprocess error: {e}",
+        )
 
 
 def _extract_domain_and_task(question_data: Optional[Dict[str, Any]]) -> tuple:
@@ -66,6 +201,15 @@ def run_inference(
     generation_kwargs = dict(kwargs)
     if question_data:
         generation_kwargs["question_data"] = question_data
+
+    # Open-source models: run in the model's venv via subprocess
+    venv_python = _get_model_venv_python(model_name)
+    if venv_python:
+        result = _run_via_subprocess(
+            model_name, venv_python, image_path, text_prompt, output_dir, **generation_kwargs
+        )
+        result["question_data"] = question_data
+        return result
 
     wrapper_class = _load_model_wrapper(model_name)
 
@@ -119,9 +263,17 @@ class InferenceRunner:
         if question_data:
             generation_kwargs['question_data'] = question_data
 
-        wrapper = self._get_or_create_wrapper(model_name)
-        wrapper.output_dir = domain_dir
-        result = wrapper.generate(image_path, text_prompt, **generation_kwargs)
+        # Use subprocess for venv models, direct import for API models
+        venv_python = _get_model_venv_python(model_name)
+        if venv_python:
+            result = _run_via_subprocess(
+                model_name, venv_python, image_path, text_prompt,
+                str(domain_dir), **generation_kwargs
+            )
+        else:
+            wrapper = self._get_or_create_wrapper(model_name)
+            wrapper.output_dir = domain_dir
+            result = wrapper.generate(image_path, text_prompt, **generation_kwargs)
 
         self._rename_video_to_task_id(domain_dir, task_id, result)
         print(f"\nInference complete: {domain_dir / f'{task_id}.mp4'}")
