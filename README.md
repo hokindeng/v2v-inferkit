@@ -3,9 +3,10 @@
 Unified inference toolkit for **video-to-video** generation models — the V2V
 subset of [VBVR-InferKit](https://github.com/Video-Reason/VBVR-InferKit).
 Give it a benchmark task (a conditioning video plus a text prompt) and it runs
-any of five commercial V2V models behind one CLI.
+any of ten V2V models — five commercial APIs and five open-source models —
+behind one CLI.
 
-## Models
+## Commercial API models
 
 | Model | Provider | API key |
 |---|---|---|
@@ -15,7 +16,30 @@ any of five commercial V2V models behind one CLI.
 | wan-2.7-video-edit | WAN 2.7 via WaveSpeed | WAVESPEED_API_KEY |
 | gemini-omni-flash-video-edit | Gemini Omni via WaveSpeed | WAVESPEED_API_KEY |
 
-All five are commercial APIs — no GPU, weights, or per-model venv needed.
+No GPU, weights, or per-model venv needed — just API keys in `.env`.
+
+## Open-source models (local GPU)
+
+| Model | Flagship checkpoint | GPU needed | Notes |
+|---|---|---|---|
+| wan-vace-14b-v2v | Wan2.1-VACE-14B (diffusers) | 1× 48GB, 480p | true V2V editing |
+| hy-omniweaving-v2v | tencent/HY-OmniWeaving | 1× ≥14GB w/ offload, 480p | true V2V editing; model dir needs 4 extra components (one HF-gated) |
+| ltx-2.3-dev-v2v | LTX-2.3 22B via IC-LoRA | 1× 48GB (fp8) / 80GB (bf16) | ⚠ official v2v pipeline is distilled-only — pending team ruling |
+| magi-24b-v2v | MAGI-1 24B base | 4× 80GB | ⚠ v2v = video CONTINUATION, not editing |
+| cosmos3-super-v2v | nvidia/Cosmos3-Super | 4× 80GB, 132GB ckpt | video transfer (edge control) |
+
+Install one with:
+
+```bash
+bash setup/install_model.sh --model wan-vace-14b-v2v
+# reuse an existing checkpoint dir:
+V2V_WEIGHTS_DIR=~/models bash setup/install_model.sh --model wan-vace-14b-v2v
+```
+
+Each open-source model runs in its own venv (`envs/<model>/`); the runner
+detects the venv and dispatches inference to it in a subprocess automatically.
+Research notes per model (entrypoints, VRAM, gotchas) live with the
+integration task owner.
 
 ## Quick start
 
