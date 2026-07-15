@@ -47,29 +47,25 @@ if [[ ! -d "${MODEL_DIR}/text_encoder/Glyph-SDXL-v2" ]] || [[ -z "$(ls -A "${MOD
 else
     print_skip "Glyph-SDXL-v2 exists"
 fi
-# The pipeline loads SiglipVisionModel directly from vision_encoder/siglip/,
-# so the model files must sit at that folder's root. In the FLUX.1-Redux-dev
-# repo they live in the image_encoder/ SUBFOLDER — download just that (plus
-# the feature_extractor preprocessor config) and flatten. Check for the actual
-# model file, not a non-empty dir: a pre-license 403 leaves a husk (gated
-# repos expose README/LICENSE publicly) that fools an ls -A check.
-if [[ ! -f "${MODEL_DIR}/vision_encoder/siglip/model.safetensors" ]]; then
-    print_download "FLUX.1-Redux siglip (GATED — needs HF_TOKEN + accepted license)"
+# The pipeline loads SiglipVisionModel.from_pretrained(siglip_path,
+# subfolder='image_encoder') — so the FLUX repo's directory layout must be
+# preserved under vision_encoder/siglip/. Download only the needed subfolders
+# (separate --include flags; two patterns after one flag get misparsed as
+# positional filenames). Check for the actual model file, not a non-empty
+# dir: a pre-license 403 leaves a husk (gated repos expose README/LICENSE
+# publicly) that fools an ls -A check.
+if [[ ! -f "${MODEL_DIR}/vision_encoder/siglip/image_encoder/model.safetensors" ]]; then
+    print_download "FLUX.1-Redux siglip (GATED — needs HF_TOKEN + accepted/approved license)"
     rm -rf "${MODEL_DIR}/vision_encoder/siglip"
-    SIGLIP_TMP="$(mktemp -d)"
     if ! hf download black-forest-labs/FLUX.1-Redux-dev \
-        --include "image_encoder/*" "feature_extractor/*" \
-        --local-dir "$SIGLIP_TMP"; then
-        rm -rf "$SIGLIP_TMP"
-        print_warning "siglip download failed — likely gated access. Accept the license at"
-        print_warning "https://huggingface.co/black-forest-labs/FLUX.1-Redux-dev and re-run."
+        --include "image_encoder/*" --include "feature_extractor/*" \
+        --local-dir "${MODEL_DIR}/vision_encoder/siglip"; then
+        print_warning "siglip download failed — gated access not granted yet. Request access at"
+        print_warning "https://huggingface.co/black-forest-labs/FLUX.1-Redux-dev, wait for approval"
+        print_warning "(check https://huggingface.co/settings/gated-repos), then re-run."
         deactivate
         exit 1
     fi
-    mkdir -p "${MODEL_DIR}/vision_encoder/siglip"
-    cp "$SIGLIP_TMP"/image_encoder/* "${MODEL_DIR}/vision_encoder/siglip/"
-    cp "$SIGLIP_TMP"/feature_extractor/* "${MODEL_DIR}/vision_encoder/siglip/" 2>/dev/null || true
-    rm -rf "$SIGLIP_TMP"
 else
     print_skip "siglip exists"
 fi
