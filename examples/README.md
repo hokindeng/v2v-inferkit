@@ -26,3 +26,10 @@ The sample task comes from VBVR-InferKit's sample runs: a turntable carries a
 cyan cube behind a partial screen; the model must keep the cube present
 through a full rotation. It is small on purpose (32 KB video) — one cheap
 real-API smoke test.
+
+## Sample runs
+
+`sample_runs/<model>/turntable_0000/` holds verified smoke-test outputs
+(output.mp4 + a README with timings, settings, and the pass/caveat verdict)
+for each open-source model as it clears on-GPU verification — same convention
+as upstream VBVR-InferKit.
