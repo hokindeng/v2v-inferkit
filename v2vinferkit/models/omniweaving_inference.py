@@ -139,6 +139,10 @@ class OmniWeavingService:
                 "--sparse_attn", "false",
                 "--use_sageattn", "false",
                 "--enable_cache", "false",
+                # group offloading calls diffusers' enable_group_offload, which
+                # doesn't exist in the repo's own pinned diffusers==0.32.2 —
+                # plain offloading is sufficient on a 48GB GPU (bf16 DiT ~17GB)
+                "--group_offloading", "false",
                 "--overlap_group_offloading", "false",
                 "--output_path", str(output_path),
                 "--model_path", str(self.model_path),
