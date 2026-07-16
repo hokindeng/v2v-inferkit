@@ -129,8 +129,10 @@ class OmniWeavingService:
 
             venv_torchrun = _kit_root() / "envs" / "hy-omniweaving-v2v" / "bin" / "torchrun"
             torchrun = str(venv_torchrun) if venv_torchrun.exists() else (shutil.which("torchrun") or "torchrun")
+            # --standalone picks a free rendezvous port, so parallel workers
+            # on one host don't collide on torchrun's default 29500
             cmd = [
-                torchrun, "--nproc_per_node=1", "generate.py",
+                torchrun, "--standalone", "--nproc_per_node=1", "generate.py",
                 "--task", "editing",
                 "--prompt", text_prompt,
                 "--condition_video_paths", input_video,

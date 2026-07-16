@@ -111,9 +111,10 @@ class MagiService:
 
             venv_torchrun = _kit_root() / "envs" / "magi-24b-v2v" / "bin" / "torchrun"
             torchrun = str(venv_torchrun) if venv_torchrun.exists() else (shutil.which("torchrun") or "torchrun")
+            # --standalone picks a free rendezvous port, so two 4-GPU MAGI
+            # groups on one host don't collide on a fixed port
             cmd = [
-                torchrun, "--rdzv-backend=c10d",
-                "--rdzv-endpoint=localhost:6009",
+                torchrun, "--standalone",
                 "--nnodes=1", f"--nproc_per_node={self.num_gpus}",
                 "inference/pipeline/entry.py",
                 "--config_file", str(config_path),
