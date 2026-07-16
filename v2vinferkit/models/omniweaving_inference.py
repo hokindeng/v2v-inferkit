@@ -151,6 +151,9 @@ class OmniWeavingService:
             ]
             if num_inference_steps is not None:
                 cmd += ["--num_inference_steps", str(num_inference_steps)]
+            if os.environ.get("V2V_NO_OFFLOAD") == "1":
+                # 80GB-class GPUs: keep components resident, much faster
+                cmd += ["--offloading", "false"]
 
             env = dict(os.environ)
             env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True,max_split_size_mb:128")

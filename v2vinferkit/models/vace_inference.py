@@ -68,8 +68,12 @@ class VaceService:
         self.pipe.scheduler = UniPCMultistepScheduler.from_config(
             self.pipe.scheduler.config, flow_shift=3.0
         )
-        # Key to fitting 14B on a 48GB GPU
-        self.pipe.enable_model_cpu_offload()
+        if os.environ.get("V2V_NO_OFFLOAD") == "1":
+            # 80GB-class GPUs: whole pipeline resident, much faster
+            self.pipe.to("cuda")
+        else:
+            # Key to fitting 14B on a 48GB GPU
+            self.pipe.enable_model_cpu_offload()
 
     def _prepare_frames(self, video_path: Union[str, Path], num_frames: Optional[int]):
         """Load, orient, resize (aspect-preserving + center crop), cap to 4n+1."""
