@@ -19,12 +19,16 @@ create_model_venv "$MODEL"
 activate_model_venv "$MODEL"
 
 print_section "Dependencies"
-pip install -q "torch~=2.7.0" --index-url https://download.pytorch.org/whl/cu126
+# Pin the full torch triplet on ONE CUDA index — torchvision/torchaudio left
+# unpinned resolve from the default index and can land CUDA-13 builds beside
+# cu126 torch (libcudart.so.13 crash, hit live 2026-07-17).
+pip install -q "torch~=2.7.0" "torchvision~=0.22.0" "torchaudio~=2.7.0" \
+    --index-url https://download.pytorch.org/whl/cu126
 # install the pipelines package editable from the monorepo (issue #216: plain
 # pip missed the multigpu module — current main is fixed, keep -e)
 pip install -q -e "${REPOS_DIR}/LTX-2/packages/ltx-core"
 pip install -q -e "${REPOS_DIR}/LTX-2/packages/ltx-pipelines"
-pip install -q "huggingface_hub[cli]"
+pip install -q "huggingface_hub[cli]" sentencepiece
 
 deactivate
 

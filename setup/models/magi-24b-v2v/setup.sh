@@ -23,7 +23,8 @@ pip install -q torch==2.4.0 torchvision==0.19.0 --index-url https://download.pyt
 # flash-attn 2.4.2 is an old pin that often fails to build on new stacks
 # (issues #65/#118/#92). Try the wheel; on failure fall back to source build
 # with a warning. MagiAttention is Hopper-only — NOT needed on A100.
-if ! pip install -q flash-attn==2.4.2 --no-build-isolation; then
+pip install -q ninja  # without ninja the source build compiles SERIALLY (hours)
+if ! MAX_JOBS="$(nproc)" pip install -q flash-attn==2.4.2 --no-build-isolation; then
     print_warning "flash-attn 2.4.2 install failed — MAGI requires it; consider the sandai/magi docker image instead"
     deactivate
     exit 1
