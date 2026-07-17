@@ -31,7 +31,8 @@ if ! MAX_JOBS="$(nproc)" pip install -q flash-attn==2.4.2 --no-build-isolation; 
 fi
 pip install -q flashinfer-python==0.2.0.post2 -i https://flashinfer.ai/whl/cu124/torch2.4/
 pip install -q transformers==4.42.3 diffusers==0.29.2 accelerate==0.32.1 \
-    "numpy==1.26.4" ffmpeg-python easydict omegaconf "huggingface_hub[cli]"
+    "numpy==1.26.4" ffmpeg-python easydict omegaconf "huggingface_hub[cli]" \
+    ftfy regex einops  # ftfy: t5_model.py imports it bare (hit 2026-07-17)
 
 deactivate
 
