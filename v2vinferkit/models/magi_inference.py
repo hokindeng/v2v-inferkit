@@ -64,14 +64,17 @@ class MagiService:
         """Instantiate the 24B base config with our paths and parallelism."""
         base_config = self.repo_path / "example" / "24B" / "24B_base_config.json"
         config = json.loads(base_config.read_text())
-        config["load"] = str(self.weights_path / "ckpt" / "magi" / "24B_base")
-        config["t5_pretrained"] = str(self.weights_path / "ckpt" / "t5")
-        config["vae_pretrained"] = str(self.weights_path / "ckpt" / "vae")
-        config["pp_size"] = 1
-        config["cp_size"] = self.num_gpus
-        config["cp_strategy"] = "cp_ulysses"  # cp_shuffle_overlap = garbage on base (issue #97)
-        config["num_steps"] = int(os.environ.get("MAGI_NUM_STEPS", "64"))  # 64 for base quality (issue #54)
-        config["fps"] = _FPS  # low fps crashes tiled VAE decode (issue #108)
+        # settings live in NESTED sections (runtime_config / engine_config) —
+        # top-level keys are silently ignored by MAGI (hit 2026-07-17)
+        rt, eng = config["runtime_config"], config["engine_config"]
+        rt["load"] = str(self.weights_path / "ckpt" / "magi" / "24B_base")
+        rt["t5_pretrained"] = str(self.weights_path / "ckpt" / "t5")
+        rt["vae_pretrained"] = str(self.weights_path / "ckpt" / "vae")
+        eng["pp_size"] = 1
+        eng["cp_size"] = self.num_gpus
+        eng["cp_strategy"] = "cp_ulysses"  # cp_shuffle_overlap = garbage on base (issue #97)
+        rt["num_steps"] = int(os.environ.get("MAGI_NUM_STEPS", "64"))  # 64 for base quality (issue #54)
+        rt["fps"] = _FPS  # low fps crashes tiled VAE decode (issue #108)
         out = workdir / "run_config.json"
         out.write_text(json.dumps(config, indent=2))
         return out
