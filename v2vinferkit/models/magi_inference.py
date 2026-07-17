@@ -68,7 +68,11 @@ class MagiService:
         # top-level keys are silently ignored by MAGI (hit 2026-07-17)
         rt, eng = config["runtime_config"], config["engine_config"]
         rt["load"] = str(self.weights_path / "ckpt" / "magi" / "24B_base")
-        rt["t5_pretrained"] = str(self.weights_path / "ckpt" / "t5")
+        # HF snapshot nests the tokenizer/encoder in a t5-v1_1-xxl subdir;
+        # point at it directly if present (hit 2026-07-17)
+        _t5 = self.weights_path / "ckpt" / "t5"
+        _t5_nested = _t5 / "t5-v1_1-xxl"
+        rt["t5_pretrained"] = str(_t5_nested if (_t5_nested / "tokenizer_config.json").exists() else _t5)
         rt["vae_pretrained"] = str(self.weights_path / "ckpt" / "vae")
         eng["pp_size"] = 1
         eng["cp_size"] = self.num_gpus
