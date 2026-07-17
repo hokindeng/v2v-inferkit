@@ -33,7 +33,7 @@ pip install -q flashinfer-python==0.2.0.post2 -i https://flashinfer.ai/whl/cu124
 pip install -q transformers==4.42.3 diffusers==0.29.2 accelerate==0.32.1 \
     "numpy==1.26.4" ffmpeg-python easydict omegaconf "huggingface_hub[cli]" \
     ftfy regex einops beautifulsoup4 lxml "opencv-python-headless==4.9.0.80" \
-    imageio imageio-ffmpeg "timm==1.0.11"  # t5_model.py imports ftfy/bs4, vae_module.py imports timm (hit 2026-07-17); cv2 pin guards numpy==1.26.4
+    imageio imageio-ffmpeg "timm==1.0.11" protobuf sentencepiece  # t5_model.py imports ftfy/bs4, vae_module.py timm; protobuf+sentencepiece for T5 fast-tokenizer spiece.model conversion (all hit 2026-07-17); cv2 pin guards numpy==1.26.4
 
 deactivate
 
