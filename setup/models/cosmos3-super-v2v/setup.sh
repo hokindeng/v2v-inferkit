@@ -19,7 +19,9 @@ clone_model_repo "https://github.com/NVIDIA/cosmos-framework.git" "cosmos-framew
 print_section "uv + framework venv (prebuilt wheels: torch 2.10.0+cu128, natten, flash-attn)"
 if ! command -v uv >/dev/null 2>&1; then
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    source "$HOME/.local/bin/env"
+    # the installer skips writing ~/.local/bin/env when the dir is already on
+    # PATH (hit 2026-07-17) — extend PATH directly instead of sourcing it
+    export PATH="$HOME/.local/bin:$PATH"
 fi
 cd "${REPOS_DIR}/cosmos-framework"
 export GIT_LFS_SKIP_SMUDGE=1
