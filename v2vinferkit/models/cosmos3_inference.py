@@ -149,6 +149,11 @@ class Cosmos3Service:
             env = dict(os.environ)
             env["CUDA_VISIBLE_DEVICES"] = env.get("CUDA_VISIBLE_DEVICES", gpus)
             env["LD_LIBRARY_PATH"] = ""  # bundled-libtorch conflict guard
+            # cosmos checkpoint_db shells out to `uvx` (uv tool-runner) to
+            # resolve the Qwen reasoner even when it's cached; under a non-login
+            # shell ~/.local/bin isn't on PATH → FileNotFoundError: 'uvx' and
+            # every sample dies at model build (hit 2026-07-17). Force it on.
+            env["PATH"] = f"{Path.home() / '.local' / 'bin'}:{env.get('PATH', '')}"
             env.setdefault("PYTHONNOUSERSITE", "1")
             env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
             env.setdefault("NCCL_NET_PLUGIN", "none")  # EFA/Libfabric segfault guard on AWS
