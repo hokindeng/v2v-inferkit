@@ -1,0 +1,1 @@
+A supported turntable carries a single cyan cube. A foreground screen hides part of the turntable while it rotates one full 360-degree turn. The same cyan cube must remain on the turntable throughout.
