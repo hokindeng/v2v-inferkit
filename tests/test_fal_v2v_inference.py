@@ -35,6 +35,16 @@ def test_reference_payload_profiles(
 @pytest.mark.parametrize(
     "profile,expected_defaults",
     [
+        (
+            "luma_ray_3_2",
+            {"video_url": "https://input/video.mp4", "resolution": "720p", "duration": "5s"},
+        ),
+        ("kling_o1_edit", {"video_url": "https://input/video.mp4", "keep_audio": True}),
+        (
+            "wan27_edit",
+            {"video_url": "https://input/video.mp4", "resolution": "1080p", "duration": "0"},
+        ),
+        ("gemini_omni", {"video_url": "https://input/video.mp4"}),
         ("gemini_omni_edit", {"video_url": "https://input/video.mp4", "resolution": "720p"}),
         ("kling_o3_edit", {"video_url": "https://input/video.mp4", "keep_audio": True}),
         (
@@ -50,7 +60,8 @@ def test_direct_edit_payload_profiles(profile, expected_defaults):
 
     for key, value in expected_defaults.items():
         assert payload[key] == value
-    assert "duration" not in payload
+    if "duration" not in expected_defaults:
+        assert "duration" not in payload
 
 
 def test_runtime_controls_override_profile_defaults():
@@ -94,6 +105,36 @@ def test_explicit_duration_outside_profile_limit_fails():
             "https://input/video.mp4",
             5.0,
             requested_duration=16,
+        )
+
+
+@pytest.mark.parametrize(
+    "profile,duration,expected",
+    [
+        ("luma_ray_3_2", 10, "10s"),
+        ("wan27_edit", 6, "6"),
+    ],
+)
+def test_discrete_duration_profiles(profile, duration, expected):
+    service = FalV2VService("provider/model", profile)
+    payload = service.build_payload(
+        "edit",
+        "https://input/video.mp4",
+        5.0,
+        requested_duration=duration,
+    )
+
+    assert payload["duration"] == expected
+
+
+def test_discrete_duration_profile_rejects_unsupported_value():
+    service = FalV2VService("provider/model", "luma_ray_3_2")
+    with pytest.raises(ValueError, match="one of 5, 10 seconds"):
+        service.build_payload(
+            "edit",
+            "https://input/video.mp4",
+            5.0,
+            requested_duration=6,
         )
 
 

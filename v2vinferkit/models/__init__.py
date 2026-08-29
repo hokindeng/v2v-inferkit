@@ -3,11 +3,7 @@
 import importlib
 
 __all__ = [
-    "LumaInference", "LumaWrapper",
-    "KlingService", "KlingWrapper",
     "RunwayService", "RunwayWrapper",
-    "Wan27Service", "Wan27Wrapper",
-    "GeminiOmniService", "GeminiOmniWrapper",
     "FalV2VService", "FalV2VWrapper",
     "VaceService", "VaceWrapper",
     "OmniWeavingService", "OmniWeavingWrapper",
@@ -17,11 +13,7 @@ __all__ = [
 ]
 
 _MODULE_MAP = {
-    "luma_inference": ["LumaInference", "LumaWrapper"],
-    "kling_inference": ["KlingService", "KlingWrapper"],
     "runway_inference": ["RunwayService", "RunwayWrapper"],
-    "wan27_inference": ["Wan27Service", "Wan27Wrapper"],
-    "gemini_omni_inference": ["GeminiOmniService", "GeminiOmniWrapper"],
     "fal_v2v_inference": ["FalV2VService", "FalV2VWrapper"],
     "vace_inference": ["VaceService", "VaceWrapper"],
     "omniweaving_inference": ["OmniWeavingService", "OmniWeavingWrapper"],

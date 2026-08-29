@@ -25,6 +25,46 @@ logger = logging.getLogger(__name__)
 
 
 _PROFILES: Dict[str, Dict[str, Any]] = {
+    "luma_ray_3_2": {
+        "video_field": "video_url",
+        "duration_values": {5, 10},
+        "duration_type": "seconds_string",
+        "allowed_controls": {
+            "resolution", "duration", "auto_controls", "hdr", "exr_export",
+        },
+        "defaults": {
+            "resolution": "720p",
+            "duration": "5s",
+            "auto_controls": True,
+        },
+    },
+    "kling_o1_edit": {
+        "video_field": "video_url",
+        "input_min": 3.0,
+        "input_max": 10.0,
+        "allowed_controls": {"keep_audio"},
+        "defaults": {"keep_audio": True},
+    },
+    "wan27_edit": {
+        "video_field": "video_url",
+        "input_min": 2.0,
+        "input_max": 10.0,
+        "duration_values": set(range(2, 11)),
+        "duration_type": "string",
+        "allowed_controls": {
+            "resolution", "duration", "aspect_ratio", "audio_setting", "seed",
+            "enable_safety_checker",
+        },
+        "defaults": {
+            "resolution": "1080p",
+            "duration": "0",
+            "audio_setting": "auto",
+            "enable_safety_checker": True,
+        },
+    },
+    "gemini_omni": {
+        "video_field": "video_url",
+    },
     "wan3": {
         "video_field": "reference_video_urls",
         "video_is_list": True,
@@ -136,6 +176,9 @@ _CONTROL_KEYS = {
     "enable_thinking",
     "enable_safety_checker",
     "end_user_id",
+    "auto_controls",
+    "hdr",
+    "exr_export",
 }
 
 
@@ -317,6 +360,20 @@ class FalV2VService:
                 if profile.get("duration_type") == "string"
                 else output_duration
             )
+        elif requested_duration is not None and "duration_values" in profile:
+            output_duration = int(math.ceil(requested_duration))
+            if output_duration not in profile["duration_values"]:
+                choices = ", ".join(str(value) for value in sorted(profile["duration_values"]))
+                raise ValueError(
+                    f"Requested duration must be one of {choices} seconds for {self.endpoint}"
+                )
+            duration_type = profile.get("duration_type")
+            if duration_type == "seconds_string":
+                payload["duration"] = f"{output_duration}s"
+            elif duration_type == "string":
+                payload["duration"] = str(output_duration)
+            else:
+                payload["duration"] = output_duration
 
         allowed_controls = profile.get("allowed_controls", set())
         for key, value in kwargs.items():

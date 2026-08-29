@@ -10,12 +10,12 @@ behind one CLI.
 | Model | Provider | API key |
 |---|---|---|
 | runway-aleph-v2v | Runway Aleph 2 | RUNWAYML_API_SECRET |
-| kling-v2-6-v2v | Kling Omni | KLING_API_KEY + FAL_KEY |
-| luma-ray-3.2-v2v | Luma Ray 3.2 video_edit | LUMA_AGENTS_API_KEY + FAL_KEY |
-| wan-2.7-video-edit | WAN 2.7 via WaveSpeed | WAVESPEED_API_KEY |
+| kling-v2-6-v2v | Kling O1 Edit via fal.ai | FAL_KEY |
+| luma-ray-3.2-v2v | Luma Ray 3.2 via fal.ai | FAL_KEY |
+| wan-2.7-video-edit | WAN 2.7 via fal.ai | FAL_KEY |
 | wan-3.0-video-edit | WAN 3.0 via fal.ai | FAL_KEY |
 | wan-3.0-prime-video-edit | WAN 3.0 Prime via fal.ai | FAL_KEY |
-| gemini-omni-flash-video-edit | Gemini Omni via WaveSpeed | WAVESPEED_API_KEY |
+| gemini-omni-flash-video-edit | Gemini Omni via fal.ai | FAL_KEY |
 | gemini-omni-flash-1.1-video-edit | Gemini Omni Flash 1.1 via fal.ai | FAL_KEY |
 | minimax-h3-v2v | MiniMax H3 reference-to-video via fal.ai | FAL_KEY |
 | seedance-2.0-v2v | Seedance 2.0 via fal.ai | FAL_KEY |
@@ -26,7 +26,34 @@ behind one CLI.
 | happy-horse-1.0-video-edit | Happy Horse 1.0 Edit via fal.ai | FAL_KEY |
 | grok-imagine-video-edit | Grok Imagine Video Edit via fal.ai | FAL_KEY |
 
-No GPU, weights, or per-model venv needed — just API keys in `.env`.
+No GPU, weights, or per-model venv needed. One `FAL_KEY` runs every fal-hosted
+model in the table; Runway alone uses `RUNWAYML_API_SECRET` because its Aleph
+endpoint is not available through fal.ai.
+
+## Configure all API keys
+
+Export every key with one shell command before running inference:
+
+```bash
+export FAL_KEY="your-fal-key" \
+       RUNWAYML_API_SECRET="your-runway-key" \
+       HF_TOKEN="your-huggingface-token"
+```
+
+`FAL_KEY` covers all fal-hosted commercial models, `RUNWAYML_API_SECRET` is only
+for Runway Aleph, and `HF_TOKEN` is only for gated local checkpoints. If you
+only run fal-hosted models, `export FAL_KEY="your-fal-key"` is all you need.
+
+Shell exports last for the current terminal session. To load the same keys
+automatically in future sessions, put the command in `~/.zshrc` (zsh) or
+`~/.bashrc` (bash), then open a new terminal.
+
+Alternatively, keep the keys project-local:
+
+```bash
+cp env.template .env
+# Edit .env and replace the empty values; run.py loads it automatically.
+```
 
 ## Open-source models (local GPU)
 

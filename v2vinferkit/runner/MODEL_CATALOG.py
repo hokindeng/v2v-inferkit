@@ -8,30 +8,37 @@ entries run locally in their model-specific venv.
 """
 from typing import Any, Dict
 
-# Luma AI (LUMA_AGENTS_API_KEY or LUMA_API_KEY; input uploaded via FAL_KEY)
+# Hosted APIs use one FAL_KEY for upload and inference unless noted otherwise.
 LUMA_MODELS = {
     "luma-ray-3.2-v2v": {
-        "wrapper_module": "v2vinferkit.models.luma_inference",
-        "wrapper_class": "LumaWrapper",
-        "service_class": "LumaInference",
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
         "model": "ray-3.2",
         "modality": "v2v",
-        "description": "Luma Ray 3.2 Video-to-Video (video_edit via Agents API)",
-        "family": "Luma"
+        "description": "Luma Ray 3.2 video editing via fal.ai",
+        "family": "Luma",
+        "args": {
+            "endpoint": "luma/agent/ray/v3.2/video-to-video",
+            "profile": "luma_ray_3_2",
+        },
     },
 }
 
-# Kling AI (KLING_API_KEY, or KLING_ACCESS_KEY + KLING_SECRET_KEY for JWT;
-# input uploaded via FAL_KEY)
+# Kling AI via fal.ai (FAL_KEY)
 KLING_MODELS = {
     "kling-v2-6-v2v": {
-        "wrapper_module": "v2vinferkit.models.kling_inference",
-        "wrapper_class": "KlingWrapper",
-        "service_class": "KlingService",
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
         "model": "kling-video-o1",
         "modality": "v2v",
-        "description": "Kling Omni V2V via /v1/videos/omni-video endpoint",
-        "family": "Kling AI"
+        "description": "Kling O1 video editing via fal.ai (legacy model ID)",
+        "family": "Kling AI",
+        "args": {
+            "endpoint": "fal-ai/kling-video/o1/video-to-video/edit",
+            "profile": "kling_o1_edit",
+        },
     },
     "kling-o3-pro-video-edit": {
         "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
@@ -61,16 +68,20 @@ RUNWAY_MODELS = {
     },
 }
 
-# WAN 2.7 via WaveSpeed (WAVESPEED_API_KEY; input inlined as base64 data-URI)
+# WAN 2.7 via fal.ai (FAL_KEY)
 WAN27_MODELS = {
     "wan-2.7-video-edit": {
-        "wrapper_module": "v2vinferkit.models.wan27_inference",
-        "wrapper_class": "Wan27Wrapper",
-        "service_class": "Wan27Service",
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
         "model": "wan-2.7",
         "modality": "v2v",
-        "description": "WAN 2.7 Video Edit - Prompt-driven video editing (720p/1080p)",
-        "family": "WAN 2.7"
+        "description": "WAN 2.7 prompt-driven video editing via fal.ai",
+        "family": "WAN 2.7",
+        "args": {
+            "endpoint": "fal-ai/wan/v2.7/edit-video",
+            "profile": "wan27_edit",
+        },
     },
 }
 
@@ -104,16 +115,20 @@ WAN3_MODELS = {
     },
 }
 
-# Gemini Omni Flash Video Edit via WaveSpeed (WAVESPEED_API_KEY)
+# Gemini Omni Flash video editing via fal.ai (FAL_KEY)
 GEMINI_OMNI_MODELS = {
     "gemini-omni-flash-video-edit": {
-        "wrapper_module": "v2vinferkit.models.gemini_omni_inference",
-        "wrapper_class": "GeminiOmniWrapper",
-        "service_class": "GeminiOmniService",
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
         "model": "gemini-omni-flash",
         "modality": "v2v",
-        "description": "Gemini Omni Flash Video Edit - Natural-language video editing",
-        "family": "Gemini Omni"
+        "description": "Gemini Omni Flash natural-language video editing via fal.ai",
+        "family": "Gemini Omni",
+        "args": {
+            "endpoint": "google/gemini-omni-flash/edit",
+            "profile": "gemini_omni",
+        },
     },
     "gemini-omni-flash-1.1-video-edit": {
         "wrapper_module": "v2vinferkit.models.fal_v2v_inference",

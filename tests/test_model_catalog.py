@@ -1,7 +1,11 @@
 from v2vinferkit.runner.MODEL_CATALOG import AVAILABLE_MODELS
 
 
-NEW_FAL_MODELS = {
+FAL_MODELS = {
+    "kling-v2-6-v2v": "fal-ai/kling-video/o1/video-to-video/edit",
+    "luma-ray-3.2-v2v": "luma/agent/ray/v3.2/video-to-video",
+    "wan-2.7-video-edit": "fal-ai/wan/v2.7/edit-video",
+    "gemini-omni-flash-video-edit": "google/gemini-omni-flash/edit",
     "wan-3.0-video-edit": "alibaba/wan-3.0/reference-to-video",
     "wan-3.0-prime-video-edit": "alibaba/wan-3.0-prime/reference-to-video",
     "minimax-h3-v2v": "minimax/h3/reference-to-video",
@@ -23,8 +27,8 @@ def test_catalog_contains_old_and_new_models():
     assert "kling-v2-6-v2v" in AVAILABLE_MODELS
 
 
-def test_new_fal_models_use_shared_wrapper_and_expected_endpoint():
-    for model_id, endpoint in NEW_FAL_MODELS.items():
+def test_fal_models_use_shared_wrapper_and_expected_endpoint():
+    for model_id, endpoint in FAL_MODELS.items():
         config = AVAILABLE_MODELS[model_id]
         assert config["wrapper_module"] == "v2vinferkit.models.fal_v2v_inference"
         assert config["wrapper_class"] == "FalV2VWrapper"
@@ -34,7 +38,6 @@ def test_new_fal_models_use_shared_wrapper_and_expected_endpoint():
         assert config["modality"] == "v2v"
 
 
-def test_each_new_base_model_has_one_hosted_endpoint():
-    endpoints = [AVAILABLE_MODELS[model_id]["args"]["endpoint"] for model_id in NEW_FAL_MODELS]
+def test_each_base_model_has_one_hosted_endpoint():
+    endpoints = [AVAILABLE_MODELS[model_id]["args"]["endpoint"] for model_id in FAL_MODELS]
     assert len(endpoints) == len(set(endpoints))
-

@@ -34,15 +34,28 @@ declare -a COMMERCIAL_MODELS=(
     "luma-ray-3.2-v2v"
     "wan-2.7-video-edit"
     "gemini-omni-flash-video-edit"
+    "wan-3.0-video-edit"
+    "wan-3.0-prime-video-edit"
+    "gemini-omni-flash-1.1-video-edit"
+    "minimax-h3-v2v"
+    "seedance-2.0-v2v"
+    "seedance-2.0-fast-v2v"
+    "seedance-2.0-mini-v2v"
+    "seedance-2.5-v2v"
+    "kling-o3-pro-video-edit"
+    "happy-horse-1.0-video-edit"
+    "grok-imagine-video-edit"
 )
 
 # Commercial API keys lookup (bash 3.2 compatible - no associative arrays)
 _get_api_key_for_model() {
     case "$1" in
         runway-aleph-v2v) echo "RUNWAYML_API_SECRET" ;;
-        kling-v2-6-v2v) echo "KLING_API_KEY" ;;
-        luma-ray-3.2-v2v) echo "LUMA_AGENTS_API_KEY" ;;
-        wan-2.7-video-edit|gemini-omni-flash-video-edit) echo "WAVESPEED_API_KEY" ;;
+        kling-v2-6-v2v|luma-ray-3.2-v2v|wan-2.7-video-edit|gemini-omni-flash-video-edit|\
+        wan-3.0-video-edit|wan-3.0-prime-video-edit|gemini-omni-flash-1.1-video-edit|\
+        minimax-h3-v2v|seedance-2.0-v2v|seedance-2.0-fast-v2v|\
+        seedance-2.0-mini-v2v|seedance-2.5-v2v|kling-o3-pro-video-edit|\
+        happy-horse-1.0-video-edit|grok-imagine-video-edit) echo "FAL_KEY" ;;
         *) echo "" ;;
     esac
 }

@@ -7,31 +7,30 @@ plus `video_path` and returns the standard eight fields (`success`,
 and `metadata`).
 
 Old and new versions remain separately addressable while their APIs are live.
-Where several hosts expose the same base model, the catalog keeps one hosted
-entry and currently prefers fal.ai.
+The catalog uses one hosted route per model and prefers fal.ai so one `FAL_KEY`
+covers every commercial integration except Runway Aleph.
 
 ## Commercial APIs
 
-### Existing provider integrations
+### Runway
 
-| Model ID | Provider/key | Behavior |
-|---|---|---|
-| `runway-aleph-v2v` | Runway / `RUNWAYML_API_SECRET` | Aleph 2 video-to-video; inputs under 2 seconds are padded. |
-| `kling-v2-6-v2v` | Kling / `KLING_API_KEY` or JWT pair, plus `FAL_KEY` for upload | Kling Omni editing; inputs under 4 seconds are padded. |
-| `luma-ray-3.2-v2v` | Luma / `LUMA_AGENTS_API_KEY`, plus `FAL_KEY` for upload | Ray 3.2 `video_edit`, 720p auto controls. |
-| `wan-2.7-video-edit` | WaveSpeed / `WAVESPEED_API_KEY` | Wan 2.7 prompt-driven editing; source is sent as a data URI. |
-| `gemini-omni-flash-video-edit` | WaveSpeed / `WAVESPEED_API_KEY` | Original Gemini Omni Flash video editor; source is sent as a data URI. |
+`runway-aleph-v2v` uses `RUNWAYML_API_SECRET`; fal.ai does not currently expose
+the Aleph endpoint. Inputs under 2 seconds are padded before submission.
 
 ### Shared fal.ai integrations
 
-All models below require `FAL_KEY` and use the shared fal adapter. The adapter
-uploads the source, submits a queued request, records the fal request ID,
-downloads the result, and normalizes provider errors. It rejects over-limit
-inputs before submission instead of allowing a provider to silently truncate a
-paid benchmark run.
+All other commercial models require only `FAL_KEY` and use the shared fal
+adapter. The adapter uploads the source, submits a queued request, records the
+fal request ID, downloads the result, and normalizes provider errors. It
+rejects over-limit inputs before submission instead of allowing a provider to
+silently truncate a paid benchmark run.
 
 | Model ID | fal endpoint | Default and benchmark guard |
 |---|---|---|
+| `kling-v2-6-v2v` | `fal-ai/kling-video/o1/video-to-video/edit` | Legacy catalog ID for Kling O1 Edit; source 3–10s; original audio retained. |
+| `luma-ray-3.2-v2v` | `luma/agent/ray/v3.2/video-to-video` | 720p, 5s, automatic edit controls. |
+| `wan-2.7-video-edit` | `fal-ai/wan/v2.7/edit-video` | 1080p; source 2–10s; output duration follows the source. |
+| `gemini-omni-flash-video-edit` | `google/gemini-omni-flash/edit` | Original Gemini Omni Flash editor. |
 | `wan-3.0-video-edit` | `alibaba/wan-3.0/reference-to-video` | 720p; source ≤15s; output 2–30s. |
 | `wan-3.0-prime-video-edit` | `alibaba/wan-3.0-prime/reference-to-video` | 720p; source ≤15s; output 2–30s. |
 | `minimax-h3-v2v` | `minimax/h3/reference-to-video` | 768P; source 2–15s; output 4–15s. |
@@ -55,7 +54,11 @@ Wan and MiniMax use `Video 1`, Seedance 2.0 uses `@Video1`, Seedance 2.5 uses
 left unchanged.
 
 The official endpoint pages are the source of truth for changing limits and
-pricing: [Wan 3.0](https://fal.ai/models/alibaba/wan-3.0/reference-to-video),
+pricing: [Kling O1](https://fal.ai/models/fal-ai/kling-video/o1/video-to-video/edit),
+[Luma Ray 3.2](https://fal.ai/models/luma/agent/ray/v3.2/video-to-video),
+[Wan 2.7](https://fal.ai/models/fal-ai/wan/v2.7/edit-video),
+[Gemini Omni](https://fal.ai/models/google/gemini-omni-flash/edit),
+[Wan 3.0](https://fal.ai/models/alibaba/wan-3.0/reference-to-video),
 [Wan Prime](https://fal.ai/models/alibaba/wan-3.0-prime/reference-to-video),
 [MiniMax H3](https://fal.ai/minimax-h3),
 [Seedance 2.0](https://fal.ai/models/bytedance/seedance-2.0/reference-to-video),
@@ -82,7 +85,7 @@ pricing: [Wan 3.0](https://fal.ai/models/alibaba/wan-3.0/reference-to-video),
 - These APIs cost real money and pricing changes frequently. Check the linked
   provider page before batch runs; automated tests and `--dry-run` do not make
   paid calls.
-- fal, Kling, and Luma inputs transit hosted storage. Do not submit sensitive
+- fal-hosted inputs transit hosted storage. Do not submit sensitive
   material unless that data handling is acceptable.
 - `ffprobe` is required for hosted-input validation and `ffmpeg` is required
   when a source needs minimum-duration padding.
