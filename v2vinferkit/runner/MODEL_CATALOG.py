@@ -33,6 +33,19 @@ KLING_MODELS = {
         "description": "Kling Omni V2V via /v1/videos/omni-video endpoint",
         "family": "Kling AI"
     },
+    "kling-o3-pro-video-edit": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "kling-o3-pro",
+        "modality": "v2v",
+        "description": "Kling O3 Pro video editing via fal.ai",
+        "family": "Kling AI",
+        "args": {
+            "endpoint": "fal-ai/kling-video/o3/pro/video-to-video/edit",
+            "profile": "kling_o3_edit",
+        },
+    },
 }
 
 # Runway ML (RUNWAYML_API_SECRET; input via Runway's own ephemeral upload)
@@ -61,6 +74,36 @@ WAN27_MODELS = {
     },
 }
 
+# Wan 3.0 reference-to-video tiers via fal.ai (FAL_KEY)
+WAN3_MODELS = {
+    "wan-3.0-video-edit": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "wan-3.0",
+        "modality": "v2v",
+        "description": "Wan 3.0 reference-video editing via fal.ai (720p default)",
+        "family": "Wan 3.0",
+        "args": {
+            "endpoint": "alibaba/wan-3.0/reference-to-video",
+            "profile": "wan3",
+        },
+    },
+    "wan-3.0-prime-video-edit": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "wan-3.0-prime",
+        "modality": "v2v",
+        "description": "Wan 3.0 Prime reference-video editing via fal.ai (720p default)",
+        "family": "Wan 3.0",
+        "args": {
+            "endpoint": "alibaba/wan-3.0-prime/reference-to-video",
+            "profile": "wan3",
+        },
+    },
+}
+
 # Gemini Omni Flash Video Edit via WaveSpeed (WAVESPEED_API_KEY)
 GEMINI_OMNI_MODELS = {
     "gemini-omni-flash-video-edit": {
@@ -71,6 +114,126 @@ GEMINI_OMNI_MODELS = {
         "modality": "v2v",
         "description": "Gemini Omni Flash Video Edit - Natural-language video editing",
         "family": "Gemini Omni"
+    },
+    "gemini-omni-flash-1.1-video-edit": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "gemini-omni-flash-1.1",
+        "modality": "v2v",
+        "description": "Gemini Omni Flash 1.1 natural-language video editing via fal.ai",
+        "family": "Gemini Omni",
+        "args": {
+            "endpoint": "google/gemini-omni-flash/v1.1/edit",
+            "profile": "gemini_omni_edit",
+        },
+    },
+}
+
+# MiniMax H3 multimodal reference-to-video via fal.ai (FAL_KEY)
+MINIMAX_H3_MODELS = {
+    "minimax-h3-v2v": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "minimax-h3",
+        "modality": "v2v",
+        "description": "MiniMax H3 multimodal reference-to-video via fal.ai (768P default)",
+        "family": "MiniMax H3",
+        "args": {
+            "endpoint": "minimax/h3/reference-to-video",
+            "profile": "minimax_h3",
+        },
+    },
+}
+
+# ByteDance Seedance reference-to-video versions and performance tiers (FAL_KEY)
+SEEDANCE_MODELS = {
+    "seedance-2.0-v2v": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "seedance-2.0",
+        "modality": "v2v",
+        "description": "Seedance 2.0 reference-video generation and editing via fal.ai",
+        "family": "Seedance",
+        "args": {
+            "endpoint": "bytedance/seedance-2.0/reference-to-video",
+            "profile": "seedance_2",
+        },
+    },
+    "seedance-2.0-fast-v2v": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "seedance-2.0-fast",
+        "modality": "v2v",
+        "description": "Seedance 2.0 Fast reference-video generation and editing via fal.ai",
+        "family": "Seedance",
+        "args": {
+            "endpoint": "bytedance/seedance-2.0/fast/reference-to-video",
+            "profile": "seedance_2",
+        },
+    },
+    "seedance-2.0-mini-v2v": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "seedance-2.0-mini",
+        "modality": "v2v",
+        "description": "Seedance 2.0 Mini reference-video generation and editing via fal.ai",
+        "family": "Seedance",
+        "args": {
+            "endpoint": "bytedance/seedance-2.0/mini/reference-to-video",
+            "profile": "seedance_2",
+        },
+    },
+    "seedance-2.5-v2v": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "seedance-2.5",
+        "modality": "v2v",
+        "description": "Seedance 2.5 reference-video generation and editing via fal.ai",
+        "family": "Seedance",
+        "args": {
+            "endpoint": "bytedance/seedance-2.5/reference-to-video",
+            "profile": "seedance_2_5",
+        },
+    },
+}
+
+# Alibaba Happy Horse video editor via fal.ai (FAL_KEY)
+HAPPY_HORSE_MODELS = {
+    "happy-horse-1.0-video-edit": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "happy-horse-1.0",
+        "modality": "v2v",
+        "description": "Happy Horse 1.0 natural-language video editing via fal.ai",
+        "family": "Happy Horse",
+        "args": {
+            "endpoint": "alibaba/happy-horse/video-edit",
+            "profile": "happy_horse_edit",
+        },
+    },
+}
+
+# xAI Grok Imagine Video editor via fal.ai (FAL_KEY)
+GROK_MODELS = {
+    "grok-imagine-video-edit": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "grok-imagine-video",
+        "modality": "v2v",
+        "description": "Grok Imagine natural-language video editing via fal.ai",
+        "family": "Grok Imagine",
+        "args": {
+            "endpoint": "xai/grok-imagine-video/edit-video",
+            "profile": "grok_edit",
+        },
     },
 }
 
@@ -155,7 +318,12 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
     **KLING_MODELS,
     **RUNWAY_MODELS,
     **WAN27_MODELS,
+    **WAN3_MODELS,
     **GEMINI_OMNI_MODELS,
+    **MINIMAX_H3_MODELS,
+    **SEEDANCE_MODELS,
+    **HAPPY_HORSE_MODELS,
+    **GROK_MODELS,
     **WAN_VACE_MODELS,
     **OMNIWEAVING_MODELS,
     **MAGI_MODELS,
@@ -168,7 +336,12 @@ MODEL_FAMILIES: Dict[str, Dict[str, Dict[str, Any]]] = {
     "Kling AI": KLING_MODELS,
     "Runway ML": RUNWAY_MODELS,
     "WAN 2.7": WAN27_MODELS,
+    "Wan 3.0": WAN3_MODELS,
     "Gemini Omni": GEMINI_OMNI_MODELS,
+    "MiniMax H3": MINIMAX_H3_MODELS,
+    "Seedance": SEEDANCE_MODELS,
+    "Happy Horse": HAPPY_HORSE_MODELS,
+    "Grok Imagine": GROK_MODELS,
     "Wan-VACE (open-source)": WAN_VACE_MODELS,
     "Hunyuan OmniWeaving (open-source)": OMNIWEAVING_MODELS,
     "MAGI (open-source)": MAGI_MODELS,

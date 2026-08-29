@@ -2,6 +2,11 @@
 
 Three steps.
 
+For a fal.ai V2V endpoint, prefer the shared
+`v2vinferkit.models.fal_v2v_inference.FalV2VWrapper`. Add or reuse a payload
+profile there, then register the endpoint and profile in the catalog. Do not
+copy the upload, queue polling, and download code into another wrapper.
+
 ## 1. Write (or port) the wrapper
 
 Create `v2vinferkit/models/<provider>_inference.py` with two layers:
@@ -34,6 +39,24 @@ Add an entry to `v2vinferkit/runner/MODEL_CATALOG.py`:
 Add it to a family dict and to AVAILABLE_MODELS / MODEL_FAMILIES. Also add the
 lazy-import entry in `v2vinferkit/models/__init__.py` and the key slot in
 env.template.
+
+Shared fal entries instead use:
+
+```python
+"my-fal-model-v2v": {
+    "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+    "wrapper_class": "FalV2VWrapper",
+    "service_class": "FalV2VService",
+    "model": "my-model",
+    "modality": "v2v",
+    "description": "My hosted V2V model",
+    "family": "My Provider",
+    "args": {
+        "endpoint": "provider/model/video-to-video",
+        "profile": "my_payload_profile",
+    },
+},
+```
 
 ## 3. Verify
 

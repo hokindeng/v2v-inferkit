@@ -2,7 +2,7 @@
 
 Unified inference toolkit for **video-to-video** generation models.
 Give it a benchmark task (a conditioning video plus a text prompt) and it runs
-any of ten V2V models — five commercial APIs and five open-source models —
+any of 21 V2V models — sixteen commercial APIs and five open-source models —
 behind one CLI.
 
 ## Commercial API models
@@ -13,7 +13,18 @@ behind one CLI.
 | kling-v2-6-v2v | Kling Omni | KLING_API_KEY + FAL_KEY |
 | luma-ray-3.2-v2v | Luma Ray 3.2 video_edit | LUMA_AGENTS_API_KEY + FAL_KEY |
 | wan-2.7-video-edit | WAN 2.7 via WaveSpeed | WAVESPEED_API_KEY |
+| wan-3.0-video-edit | WAN 3.0 via fal.ai | FAL_KEY |
+| wan-3.0-prime-video-edit | WAN 3.0 Prime via fal.ai | FAL_KEY |
 | gemini-omni-flash-video-edit | Gemini Omni via WaveSpeed | WAVESPEED_API_KEY |
+| gemini-omni-flash-1.1-video-edit | Gemini Omni Flash 1.1 via fal.ai | FAL_KEY |
+| minimax-h3-v2v | MiniMax H3 reference-to-video via fal.ai | FAL_KEY |
+| seedance-2.0-v2v | Seedance 2.0 via fal.ai | FAL_KEY |
+| seedance-2.0-fast-v2v | Seedance 2.0 Fast via fal.ai | FAL_KEY |
+| seedance-2.0-mini-v2v | Seedance 2.0 Mini via fal.ai | FAL_KEY |
+| seedance-2.5-v2v | Seedance 2.5 via fal.ai | FAL_KEY |
+| kling-o3-pro-video-edit | Kling O3 Pro Edit via fal.ai | FAL_KEY |
+| happy-horse-1.0-video-edit | Happy Horse 1.0 Edit via fal.ai | FAL_KEY |
+| grok-imagine-video-edit | Grok Imagine Video Edit via fal.ai | FAL_KEY |
 
 No GPU, weights, or per-model venv needed — just API keys in `.env`.
 
@@ -82,9 +93,9 @@ outputs are skipped unless you pass `--no-skip-existing`. Narrow a run with
 
 - `v2vinferkit/runner/MODEL_CATALOG.py` — the registry: one entry per model
   with its wrapper class, modality, and dispatch settings.
-- `v2vinferkit/models/*.py` — per-provider wrappers. Each returns the same
-  8-field result dict and routes to its v2v path when a video_path kwarg is
-  present.
+- `v2vinferkit/models/*.py` — provider wrappers. The hosted fal endpoints share
+  one profile-driven adapter; every wrapper returns the same 8-field result
+  dict and routes to its v2v path when a video_path kwarg is present.
 - `v2vinferkit/runner/inference.py` — dispatch. Commercial API models load
   in-process; open-source models run in their model-specific venv via a
   subprocess worker.
