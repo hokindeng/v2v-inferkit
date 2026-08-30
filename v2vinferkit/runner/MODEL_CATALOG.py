@@ -250,6 +250,20 @@ GROK_MODELS = {
             "profile": "grok_edit",
         },
     },
+    "grok-imagine-video-extend": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "grok-imagine-video",
+        "modality": "v2v",
+        "capability": "video_continuation",
+        "description": "Grok Imagine video continuation via fal.ai (extends the source past its last frame)",
+        "family": "Grok Imagine",
+        "args": {
+            "endpoint": "xai/grok-imagine-video/extend-video",
+            "profile": "grok_extend",
+        },
+    },
 }
 
 # ---------------------------------------------------------------------------

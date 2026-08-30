@@ -42,7 +42,7 @@ def test_reference_payload_profiles(
         ("kling_o1_edit", {"video_url": "https://input/video.mp4", "keep_audio": True}),
         (
             "wan27_edit",
-            {"video_url": "https://input/video.mp4", "resolution": "1080p", "duration": "0"},
+            {"video_url": "https://input/video.mp4", "resolution": "1080p", "duration": 0},
         ),
         ("gemini_omni", {"video_url": "https://input/video.mp4"}),
         ("gemini_omni_edit", {"video_url": "https://input/video.mp4", "resolution": "720p"}),
@@ -52,6 +52,7 @@ def test_reference_payload_profiles(
             {"video_url": "https://input/video.mp4", "resolution": "720p", "audio_setting": "origin"},
         ),
         ("grok_edit", {"video_url": "https://input/video.mp4", "resolution": "720p"}),
+        ("grok_extend", {"video_url": "https://input/video.mp4", "duration": 6}),
     ],
 )
 def test_direct_edit_payload_profiles(profile, expected_defaults):
@@ -112,7 +113,8 @@ def test_explicit_duration_outside_profile_limit_fails():
     "profile,duration,expected",
     [
         ("luma_ray_3_2", 10, "10s"),
-        ("wan27_edit", 6, "6"),
+        ("wan27_edit", 6, 6),
+        ("grok_extend", 2.5, 3),
     ],
 )
 def test_discrete_duration_profiles(profile, duration, expected):
@@ -136,6 +138,58 @@ def test_discrete_duration_profile_rejects_unsupported_value():
             5.0,
             requested_duration=6,
         )
+
+
+def test_extension_length_covers_ground_truth(monkeypatch, tmp_path):
+    video = tmp_path / "input.mp4"
+    video.touch()
+    monkeypatch.setattr(module, "_probe_video_fps", lambda _: 24.0)
+
+    # 60 reference frames at 24 fps = 2.5 s -> rounded up to 3 s
+    assert module.extension_seconds(video, 60) == 3
+    assert module.extension_seconds(video, 24) == 1
+
+
+def test_extend_wrapper_derives_duration_from_num_frames(monkeypatch, tmp_path):
+    video = tmp_path / "input.mp4"
+    video.touch()
+    monkeypatch.setattr(module, "_probe_video_fps", lambda _: 24.0)
+    captured = {}
+
+    def fake_generate_video(prompt, video_path, output_path, duration=None, max_wait=None, **kwargs):
+        captured["duration"] = duration
+        return {
+            "video_path": str(output_path),
+            "video_url": "https://out/video.mp4",
+            "request_id": "req-1",
+            "endpoint": "xai/grok-imagine-video/extend-video",
+            "payload": {"duration": duration},
+            "input_duration": 2.5,
+            "response": {},
+        }
+
+    wrapper = FalV2VWrapper(
+        model="grok-imagine-video-extend",
+        endpoint="xai/grok-imagine-video/extend-video",
+        profile="grok_extend",
+        output_dir=str(tmp_path),
+    )
+    monkeypatch.setattr(wrapper.service, "generate_video", fake_generate_video)
+
+    result = wrapper.generate(text_prompt="continue", video_path=video, num_frames=60)
+
+    assert result["success"] is True
+    assert captured["duration"] == 3
+
+
+def test_extend_input_guard_matches_endpoint_limits(monkeypatch, tmp_path):
+    video = tmp_path / "input.mp4"
+    video.touch()
+    monkeypatch.setattr(module, "_probe_video_duration", lambda _: 15.5)
+
+    service = FalV2VService("xai/grok-imagine-video/extend-video", "grok_extend")
+    with pytest.raises(ValueError, match="at most 15s"):
+        service.prepare_input(video)
 
 
 def test_prepare_input_rejects_provider_truncation(monkeypatch, tmp_path):

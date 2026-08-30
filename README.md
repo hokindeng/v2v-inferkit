@@ -2,7 +2,7 @@
 
 Unified inference toolkit for **video-to-video** generation models.
 Give it a benchmark task (a conditioning video plus a text prompt) and it runs
-any of 32 V2V models — sixteen commercial APIs and sixteen local/open-weight models —
+any of 33 V2V models — seventeen commercial APIs and sixteen local/open-weight models —
 behind one CLI.
 
 ## Commercial API models
@@ -25,6 +25,7 @@ behind one CLI.
 | kling-o3-pro-video-edit | Kling O3 Pro Edit via fal.ai | FAL_KEY |
 | happy-horse-1.0-video-edit | Happy Horse 1.0 Edit via fal.ai | FAL_KEY |
 | grok-imagine-video-edit | Grok Imagine Video Edit via fal.ai | FAL_KEY |
+| grok-imagine-video-extend | Grok Imagine Video Extend (continuation) via fal.ai | FAL_KEY |
 
 No GPU, weights, or per-model venv needed. One `FAL_KEY` runs every fal-hosted
 model in the table; Runway alone uses `RUNWAYML_API_SECRET` because its Aleph

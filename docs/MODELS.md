@@ -1,6 +1,6 @@
 # Models
 
-The catalog contains 32 video-to-video models: sixteen commercial APIs and
+The catalog contains 33 video-to-video models: seventeen commercial APIs and
 sixteen local/open-weight integrations. Every wrapper consumes the task prompt
 plus `video_path` and returns the standard eight fields (`success`,
 `video_path`, `error`, `duration_seconds`, `generation_id`, `model`, `status`,
@@ -33,7 +33,7 @@ silently truncate a paid benchmark run.
 | `gemini-omni-flash-video-edit` | `google/gemini-omni-flash/edit` | Original Gemini Omni Flash editor. |
 | `wan-3.0-video-edit` | `alibaba/wan-3.0/reference-to-video` | 720p; source ≤15s; output 2–30s. |
 | `wan-3.0-prime-video-edit` | `alibaba/wan-3.0-prime/reference-to-video` | 720p; source ≤15s; output 2–30s. |
-| `minimax-h3-v2v` | `minimax/h3/reference-to-video` | 768P; source 2–15s; output 4–15s. |
+| `minimax-h3-v2v` | `minimax/h3/reference-to-video` | 768P; source 2–15s; output 5–15s. |
 | `seedance-2.0-v2v` | `bytedance/seedance-2.0/reference-to-video` | 720p; source 2–15s; output 4–15s. |
 | `seedance-2.0-fast-v2v` | `bytedance/seedance-2.0/fast/reference-to-video` | Same schema as 2.0, lower-latency tier. |
 | `seedance-2.0-mini-v2v` | `bytedance/seedance-2.0/mini/reference-to-video` | Same reference limits, lower-cost Mini tier. |
@@ -42,6 +42,7 @@ silently truncate a paid benchmark run.
 | `kling-o3-pro-video-edit` | `fal-ai/kling-video/o3/pro/video-to-video/edit` | Source 3–15s; original audio retained. |
 | `happy-horse-1.0-video-edit` | `alibaba/happy-horse/video-edit` | 720p; original audio retained; benchmark guard ≤15s because output is capped at 15s. |
 | `grok-imagine-video-edit` | `xai/grok-imagine-video/edit-video` | 720p; source ≤8s because the API otherwise truncates it. |
+| `grok-imagine-video-extend` | `xai/grok-imagine-video/extend-video` | Continuation, not an edit: new frames after the source's last frame at the source resolution. Source 2–15s MP4. `duration` = extension seconds (fal default 6); when a task ships `ground_truth.mp4` the runner sends its length instead, rounded up. |
 
 For Wan, MiniMax, and Seedance reference endpoints, output duration defaults to
 the source duration rounded up to the next whole second and constrained to the
@@ -67,8 +68,9 @@ pricing: [Kling O1](https://fal.ai/models/fal-ai/kling-video/o1/video-to-video/e
 [Seedance 2.5](https://fal.ai/models/bytedance/seedance-2.5/reference-to-video),
 [Gemini Omni 1.1](https://fal.ai/models/google/gemini-omni-flash/v1.1/edit),
 [Kling O3](https://fal.ai/models/fal-ai/kling-video/o3/pro/video-to-video/edit),
-[Happy Horse](https://fal.ai/models/alibaba/happy-horse/video-edit), and
-[Grok Edit](https://fal.ai/docs/model-api-reference/video-generation-api/xai-grok-imagine-video).
+[Happy Horse](https://fal.ai/models/alibaba/happy-horse/video-edit),
+[Grok Edit](https://fal.ai/docs/model-api-reference/video-generation-api/xai-grok-imagine-video), and
+[Grok Extend](https://fal.ai/models/xai/grok-imagine-video/extend-video).
 
 ## Local/open-weight integrations
 

@@ -160,6 +160,18 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
         "allowed_controls": {"resolution"},
         "defaults": {"resolution": "720p"},
     },
+    "grok_extend": {
+        # True continuation: generates new frames after the source's last frame.
+        # `duration` is the extension length in seconds (fal default 6); the
+        # output keeps the source resolution and is source + extension long.
+        "video_field": "video_url",
+        "extension": True,
+        "input_min": 2.0,
+        "input_max": 15.0,
+        "duration_type": "integer",
+        "allowed_controls": {"duration"},
+        "defaults": {"duration": 6},
+    },
 }
 
 _CONTROL_KEYS = {
@@ -221,6 +233,51 @@ def _probe_video_duration(video_path: Union[str, Path]) -> float:
     if duration <= 0:
         raise ValueError("Input video has no positive duration")
     return duration
+
+
+def _probe_video_fps(video_path: Union[str, Path]) -> float:
+    """Return the average frame rate of the first video stream using ffprobe."""
+    if shutil.which("ffprobe") is None:
+        raise RuntimeError("ffprobe is required to derive an extension length")
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=avg_frame_rate",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(video_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe failed: {result.stderr.strip() or 'unknown error'}")
+    raw = result.stdout.strip()
+    try:
+        numerator, _, denominator = raw.partition("/")
+        fps = float(numerator) / float(denominator or 1)
+    except (ValueError, ZeroDivisionError) as exc:
+        raise RuntimeError(f"Could not parse input video frame rate: {raw!r}") from exc
+    if fps <= 0:
+        raise ValueError("Input video has no positive frame rate")
+    return fps
+
+
+def extension_seconds(video_path: Union[str, Path], num_frames: int) -> int:
+    """Whole seconds an extension endpoint must generate to cover `num_frames`.
+
+    Benchmark tasks ship a ground-truth continuation; its frame count at the
+    source's frame rate is the length the model has to produce. Rounded up so
+    the answer is never shorter than the reference.
+    """
+    if num_frames <= 0:
+        raise ValueError("num_frames must be positive to derive an extension length")
+    return max(1, int(math.ceil(num_frames / _probe_video_fps(video_path))))
 
 
 def _has_audio_stream(video_path: Union[str, Path]) -> bool:
@@ -374,6 +431,9 @@ class FalV2VService:
                 payload["duration"] = str(output_duration)
             else:
                 payload["duration"] = output_duration
+        elif requested_duration is not None and profile.get("duration_type") == "integer":
+            # Free integer seconds (extension endpoints publish no range).
+            payload["duration"] = int(math.ceil(requested_duration))
 
         allowed_controls = profile.get("allowed_controls", set())
         for key, value in kwargs.items():
@@ -478,11 +538,16 @@ class FalV2VWrapper(ModelWrapper):
     ) -> Dict[str, Any]:
         started = time.time()
         video_path = kwargs.pop("video_path", None)
+        num_frames = kwargs.pop("num_frames", None)
         output_path = Path(self.output_dir) / (output_filename or "video.mp4")
 
         try:
             if not video_path:
                 raise ValueError("video_path is required for fal V2V inference")
+            if duration is None and num_frames and self.service.profile.get("extension"):
+                # Continuation endpoints: generate exactly as long as the
+                # ground truth instead of the provider's default extension.
+                duration = extension_seconds(video_path, int(num_frames))
             allowed_kwargs = {key: value for key, value in kwargs.items() if key in _CONTROL_KEYS}
             max_wait = kwargs.get("max_wait")
             result = self.service.generate_video(
