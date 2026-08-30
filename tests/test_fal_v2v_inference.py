@@ -72,6 +72,24 @@ def test_ltx_extend_sends_exact_float_duration_and_context():
         service.build_payload("P", "https://input/video.mp4", 2.5, requested_duration=1.0)
 
 
+def test_ltx_extend_pads_short_source_to_73_plus_frames(monkeypatch, tmp_path):
+    # fal's LTX-2.3 extend endpoint rejects sources under 73 frames; a 60-frame
+    # benchmark clip must be front-padded past that, never sent as-is.
+    video = tmp_path / "input.mp4"
+    video.touch()
+    padded = tmp_path / "padded.mp4"
+    padded.touch()
+    seen = {}
+    monkeypatch.setattr(module, "_probe_video_duration", lambda _: 2.5)
+    monkeypatch.setattr(module, "_pad_video", lambda _p, src, target: seen.update(target=target) or padded)
+
+    service = FalV2VService("fal-ai/ltx-2.3/extend-video", "ltx23_extend")
+    path, duration, is_temp = service.prepare_input(video)
+
+    assert path == padded and is_temp is True
+    assert duration == seen["target"] >= 73 / 24
+
+
 def test_veo_extend_refuses_requested_duration():
     service = FalV2VService("fal-ai/veo3.1/extend-video", "veo31_extend")
     with pytest.raises(ValueError, match="fixed output duration"):

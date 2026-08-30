@@ -193,6 +193,11 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
         # `mode` end/start, `context` = seconds of source used as context. The only
         # hosted extend endpoint that can match a 2.5 s ground truth exactly.
         "video_field": "video_url",
+        # fal rejects sources under 73 frames (`video_too_few_frames`, seen
+        # 2026-08-30 on a 60-frame / 2.5 s benchmark clip). 73 frames at 24 fps
+        # is 3.04 s; pad to 3.25 s (78 frames) so frame rounding can never land
+        # short. Padding clones the FIRST frame, so the continuation seam is intact.
+        "input_min": 3.25,
         "extension": True,
         "duration_type": "float",
         "duration_float_min": 2.0,
