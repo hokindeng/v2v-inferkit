@@ -37,7 +37,7 @@ def _kit_root() -> Path:
 
 
 def _weights_dir() -> Path:
-    return Path(os.environ.get("V2V_WEIGHTS_DIR", str(_kit_root() / "weights"))) / "LTX-2.3"
+    return Path(os.environ.get("V2V_WEIGHTS_DIR") or str(_kit_root() / "weights")) / "LTX-2.3"
 
 
 def _repo_dir() -> Path:
@@ -60,8 +60,8 @@ class Ltx23Service:
 
     def __init__(self, model: str = "Lightricks/LTX-2.3:ic-lora"):
         self.model_id = model
-        self.repo_path = Path(os.environ.get("LTX2_REPO_PATH", str(_repo_dir())))
-        self.weights_path = Path(os.environ.get("LTX2_WEIGHTS_PATH", str(_weights_dir())))
+        self.repo_path = Path(os.environ.get("LTX2_REPO_PATH") or str(_repo_dir()))
+        self.weights_path = Path(os.environ.get("LTX2_WEIGHTS_PATH") or str(_weights_dir()))
         self.gemma_root = Path(os.environ.get(
             "LTX2_GEMMA_ROOT", str(self.weights_path / "gemma-3-12b")
         ))

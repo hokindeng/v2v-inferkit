@@ -20,6 +20,11 @@ For a v2v model, generate() must accept a video_path kwarg and route to the
 video-to-video path when it is set. See runway_inference.py for the cleanest
 example of the split.
 
+For a local model, reuse `v2vinferkit.models.local_utils` for repository and
+weight paths, shell-free subprocess execution, output discovery, and standard
+success/failure payloads. Keep heavyweight imports inside the service methods
+so the core environment can still list models without installing Torch.
+
 ## 2. Register it
 
 Add an entry to `v2vinferkit/runner/MODEL_CATALOG.py`:
@@ -31,14 +36,27 @@ Add an entry to `v2vinferkit/runner/MODEL_CATALOG.py`:
     "service_class": "MyService",
     "model": "provider-model-id",
     "modality": "v2v",
+    "deployment": "local",
+    "capability": "video_editing",
     "description": "One line about what it does",
-    "family": "My Provider"
+    "family": "My Provider",
+    "gpu": "1 GPU",
+    "resolution": "832x480",
+    "license": {
+        "code": "Apache-2.0",
+        "weights": "Apache-2.0",
+        "commercial_use": True,
+        "url": "https://upstream.example/model",
+    },
 },
 ```
 
 Add it to a family dict and to AVAILABLE_MODELS / MODEL_FAMILIES. Also add the
 lazy-import entry in `v2vinferkit/models/__init__.py` and the key slot in
-env.template.
+env.template. Local models also need `setup/models/<model-id>/setup.sh` and an
+entry in `LOCAL_MODELS` in `setup/lib/share.sh`. Valid capability values are
+`video_editing`, `video_conditioned_generation`, `video_continuation`, and
+`controlled_video_transfer`.
 
 Shared fal entries instead use:
 

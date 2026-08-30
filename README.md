@@ -2,7 +2,7 @@
 
 Unified inference toolkit for **video-to-video** generation models.
 Give it a benchmark task (a conditioning video plus a text prompt) and it runs
-any of 21 V2V models — sixteen commercial APIs and five open-source models —
+any of 32 V2V models — sixteen commercial APIs and sixteen local/open-weight models —
 behind one CLI.
 
 ## Commercial API models
@@ -55,25 +55,45 @@ cp env.template .env
 # Edit .env and replace the empty values; run.py loads it automatically.
 ```
 
-## Open-source models (local GPU)
+## Local/open-weight models (local GPU)
 
-| Model | Flagship checkpoint | GPU needed | Notes |
+### True video editing
+
+| Model | Checkpoint | GPU / resolution | License notes |
 |---|---|---|---|
-| wan-vace-14b-v2v | Wan2.1-VACE-14B (diffusers) | 1× 48GB, 480p | true V2V editing |
-| hy-omniweaving-v2v | tencent/HY-OmniWeaving | 1× ≥14GB w/ offload, 480p | true V2V editing; model dir needs 4 extra components (one HF-gated) |
-| ltx-2.3-dev-v2v | LTX-2.3 22B via IC-LoRA | 1× 48GB (fp8) / 80GB (bf16) | ⚠ official v2v pipeline is distilled-only — pending team ruling |
-| magi-24b-v2v | MAGI-1 24B base | 4× 80GB | ⚠ v2v = video CONTINUATION, not editing |
-| cosmos3-super-v2v | nvidia/Cosmos3-Super | 4× 80GB, 132GB ckpt | video transfer (edge control) |
+| wan-vace-1.3b-v2v | Wan2.1-VACE-1.3B Diffusers | 1 GPU, 480p | Apache-2.0 |
+| wan-vace-14b-v2v | Wan2.1-VACE-14B Diffusers | 1×48GB, 480p | Apache-2.0 |
+| hy-omniweaving-v2v | tencent/HY-OmniWeaving | 1×≥14GB with offload, 480p | Tencent Hunyuan license |
+| joyai-video-edit-v2v | jdopensource/JoyAI-Video-Edit | 1×32GB reference, 840×480 | Apache-2.0 |
+| bernini-r-1.3b-v2v | ByteDance/Bernini-R-1.3B-Diffusers | 1 GPU | Apache-2.0 |
+| bernini-r-14b-v2v | ByteDance/Bernini-R-Diffusers | H100-class recommended | Apache-2.0 |
+| kiwi-edit-5b-v2v | Kiwi-Edit 5B instruct+reference | 1 GPU, 480p | MIT code; checkpoint license unspecified |
+| editto-v2v | Ditto VACE-14B LoRA | 1 GPU, 480p | **CC-BY-NC-SA-4.0, non-commercial** |
+| sama-14b-v2v | syxbb/SAMA-14B | high-memory GPU, 480p | Apache-2.0 |
+| omnivideo2-1.3b-v2v | Fudan-FUXI/OmniVideo2-1.3B | 1 GPU with offload, 480p | upstream license unspecified |
+| omnivideo2-a14b-v2v | Fudan-FUXI/OmniVideo2-A14B | 1×80GB recommended, 480p | upstream license unspecified |
+| coinve-edit-v2v | FireCRT/CoinVE-Edit | ~54GB at 720p/49f | Apache-2.0 weights |
+| lucy-edit-1.1-v2v | decart-ai/Lucy-Edit-1.1-Dev | 1 GPU with offload, 480p | **non-commercial model license** |
+
+### Other video-conditioned capabilities
+
+| Model | Capability | GPU needed | Caveat |
+|---|---|---|---|
+| ltx-2.3-dev-v2v | video-conditioned generation via IC-LoRA | 1×48GB fp8 / 80GB bf16 | official 2.3 V2V path is distilled-checkpoint based |
+| magi-24b-v2v | video continuation | 4×80GB | extends the prefix; does not edit source frames |
+| cosmos3-super-v2v | controlled video transfer | 4×80GB, 132GB checkpoint | edge control derived from source video |
 
 Install one with:
 
 ```bash
 bash setup/install_model.sh --model wan-vace-14b-v2v
+# install every local integration (large downloads):
+bash setup/install_model.sh --local
 # reuse an existing checkpoint dir:
 V2V_WEIGHTS_DIR=~/models bash setup/install_model.sh --model wan-vace-14b-v2v
 ```
 
-Each open-source model runs in its own venv (`envs/<model>/`); the runner
+Each local model runs in its own venv (`envs/<model>/`); the runner
 detects the venv and dispatches inference to it in a subprocess automatically.
 Research notes per model (entrypoints, VRAM, gotchas) live with the
 integration task owner.
@@ -124,7 +144,7 @@ outputs are skipped unless you pass `--no-skip-existing`. Narrow a run with
   one profile-driven adapter; every wrapper returns the same 8-field result
   dict and routes to its v2v path when a video_path kwarg is present.
 - `v2vinferkit/runner/inference.py` — dispatch. Commercial API models load
-  in-process; open-source models run in their model-specific venv via a
+  in-process; local/open-weight models run in their model-specific venv via a
   subprocess worker.
 
 See docs/MODELS.md for per-model behavior and docs/ADDING_MODELS.md for how

@@ -1,7 +1,7 @@
 # Models
 
-The catalog contains 21 video-to-video models: sixteen commercial APIs and
-five local open-source integrations. Every wrapper consumes the task prompt
+The catalog contains 32 video-to-video models: sixteen commercial APIs and
+sixteen local/open-weight integrations. Every wrapper consumes the task prompt
 plus `video_path` and returns the standard eight fields (`success`,
 `video_path`, `error`, `duration_seconds`, `generation_id`, `model`, `status`,
 and `metadata`).
@@ -70,15 +70,46 @@ pricing: [Kling O1](https://fal.ai/models/fal-ai/kling-video/o1/video-to-video/e
 [Happy Horse](https://fal.ai/models/alibaba/happy-horse/video-edit), and
 [Grok Edit](https://fal.ai/docs/model-api-reference/video-generation-api/xai-grok-imagine-video).
 
-## Local open-source integrations
+## Local/open-weight integrations
 
-| Model ID | Behavior |
-|---|---|
-| `wan-vace-14b-v2v` | Wan2.1-VACE-14B true editing, 480p. |
-| `hy-omniweaving-v2v` | HY-OmniWeaving editing, 480p with offload support. |
-| `ltx-2.3-dev-v2v` | LTX-2.3 IC-LoRA conditioning; official V2V pipeline currently uses a distilled checkpoint. |
-| `magi-24b-v2v` | Prefix-video continuation, not source-footage editing. |
-| `cosmos3-super-v2v` | Edge-controlled video transfer. |
+All local integrations use `envs/<model-id>/` and checkpoints below
+`V2V_WEIGHTS_DIR` (default `weights/`). Install one with
+`bash setup/install_model.sh --model <model-id>` or install all with `--local`.
+The former `--opensource` flag remains an alias.
+
+### True video editing
+
+| Model ID | Upstream execution path | Important behavior |
+|---|---|---|
+| `wan-vace-1.3b-v2v` | Diffusers `WanVACEPipeline` | 480p source-conditioned editing; lighter VACE checkpoint. |
+| `wan-vace-14b-v2v` | Diffusers `WanVACEPipeline` | 480p; CPU offload by default, `V2V_NO_OFFLOAD=1` on 80GB GPUs. |
+| `hy-omniweaving-v2v` | Official OmniWeaving editing task | 480p with component offload; includes gated FLUX dependency. |
+| `joyai-video-edit-v2v` | Official FastAPI/WebSocket streaming server | Automatically starts a localhost service, uploads JPEG frames, finalizes its recorder, downloads the MP4, then stops it. `JOYAI_SERVER_URL` may point to a preloaded server launched with `--record-dir`. |
+| `bernini-r-1.3b-v2v` | Official `infer_single_gpu.py` | Source-only `v2v` by default; optional `reference_image_path` switches to `rv2v`. |
+| `bernini-r-14b-v2v` | Same Bernini wrapper, 14B checkpoint | H100-class GPU recommended by upstream. |
+| `kiwi-edit-5b-v2v` | Diffusers remote pipeline | Instruction+reference checkpoint; references are used only when `reference_image_path` is explicitly supplied. |
+| `editto-v2v` | Official Ditto DiffSynth script | VACE-14B plus Ditto LoRA; CC-BY-NC-SA-4.0 and non-commercial. |
+| `sama-14b-v2v` | Official SAMA single-video CLI | Wan2.1-T2V-14B base plus semantic-editing checkpoint. |
+| `omnivideo2-1.3b-v2v` | Official 1.3B E2E/VLM entrypoint | Requires Qwen3-VL-30B-A3B; component offload supported. |
+| `omnivideo2-a14b-v2v` | Official A14B E2E/VLM entrypoint | Requires Qwen3-VL-30B-A3B and an 80GB-class GPU. |
+| `coinve-edit-v2v` | Official single-video CoinVE CLI | A normal prompt is one instruction; callers may pass `instructions=[...]` for the native 2–5 instruction mode. |
+| `lucy-edit-1.1-v2v` | Diffusers `LucyEditPipeline` | 5B editor with FP32 VAE; model license is non-commercial. |
+
+`first_frame.png` is not silently treated as a reference image. This preserves
+identical source-video benchmark semantics across models. Specialized callers
+can pass `reference_image_path` directly to Bernini, Kiwi, or JoyAI wrappers.
+
+### Other video-conditioned capabilities
+
+| Model ID | Capability | Caveat |
+|---|---|---|
+| `ltx-2.3-dev-v2v` | `video_conditioned_generation` | IC-LoRA path; the official 2.3 V2V pipeline uses a distilled checkpoint. |
+| `magi-24b-v2v` | `video_continuation` | Generates frames after a video prefix and does not edit the supplied footage. |
+| `cosmos3-super-v2v` | `controlled_video_transfer` | Uses source-derived edge control rather than instruction-only editing. |
+
+Catalog license metadata separates code and weight licenses and includes a
+`commercial_use` value. `null` means upstream terms require manual review; it
+does not mean commercial use is allowed.
 
 ## Operational notes
 

@@ -2,7 +2,7 @@
 
 Two dispatch paths:
 - Commercial API models: wrapper loaded from MODEL_CATALOG, called in-process.
-- Open-source models: if envs/<venv_id>/bin/python exists, inference runs in a
+- Local/open-weight models: if envs/<venv_id>/bin/python exists, inference runs in a
   subprocess inside that model-specific venv via models/_subprocess_worker.py
   (heavy deps like torch/diffusers stay out of the core process).
 """
@@ -202,7 +202,7 @@ def run_inference(
     if question_data:
         generation_kwargs["question_data"] = question_data
 
-    # Open-source models: run in the model's venv via subprocess
+    # Local/open-weight models: run in the model's venv via subprocess
     venv_python = _get_model_venv_python(model_name)
     if venv_python:
         result = _run_via_subprocess(

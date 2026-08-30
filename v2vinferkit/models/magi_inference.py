@@ -44,7 +44,7 @@ def _kit_root() -> Path:
 
 
 def _weights_dir() -> Path:
-    return Path(os.environ.get("V2V_WEIGHTS_DIR", str(_kit_root() / "weights"))) / "MAGI-1"
+    return Path(os.environ.get("V2V_WEIGHTS_DIR") or str(_kit_root() / "weights")) / "MAGI-1"
 
 
 def _repo_dir() -> Path:
@@ -56,8 +56,8 @@ class MagiService:
 
     def __init__(self, model: str = "sand-ai/MAGI-1:24B_base"):
         self.model_id = model
-        self.repo_path = Path(os.environ.get("MAGI_REPO_PATH", str(_repo_dir())))
-        self.weights_path = Path(os.environ.get("MAGI_WEIGHTS_PATH", str(_weights_dir())))
+        self.repo_path = Path(os.environ.get("MAGI_REPO_PATH") or str(_repo_dir()))
+        self.weights_path = Path(os.environ.get("MAGI_WEIGHTS_PATH") or str(_weights_dir()))
         self.num_gpus = int(os.environ.get("MAGI_NUM_GPUS", "4"))
 
     def _build_config(self, workdir: Path) -> Path:

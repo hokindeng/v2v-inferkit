@@ -21,10 +21,60 @@ FAL_MODELS = {
 
 
 def test_catalog_contains_old_and_new_models():
-    assert len(AVAILABLE_MODELS) == 21
+    assert len(AVAILABLE_MODELS) == 32
     assert "wan-2.7-video-edit" in AVAILABLE_MODELS
     assert "gemini-omni-flash-video-edit" in AVAILABLE_MODELS
     assert "kling-v2-6-v2v" in AVAILABLE_MODELS
+
+
+LOCAL_MODELS = {
+    "wan-vace-1.3b-v2v",
+    "wan-vace-14b-v2v",
+    "hy-omniweaving-v2v",
+    "joyai-video-edit-v2v",
+    "bernini-r-1.3b-v2v",
+    "bernini-r-14b-v2v",
+    "kiwi-edit-5b-v2v",
+    "editto-v2v",
+    "sama-14b-v2v",
+    "omnivideo2-1.3b-v2v",
+    "omnivideo2-a14b-v2v",
+    "coinve-edit-v2v",
+    "lucy-edit-1.1-v2v",
+    "ltx-2.3-dev-v2v",
+    "magi-24b-v2v",
+    "cosmos3-super-v2v",
+}
+
+
+def test_local_models_have_capability_and_license_metadata():
+    actual = {
+        model_id for model_id, config in AVAILABLE_MODELS.items()
+        if config.get("deployment") == "local"
+    }
+    assert actual == LOCAL_MODELS
+    for model_id in actual:
+        config = AVAILABLE_MODELS[model_id]
+        assert config["capability"] in {
+            "video_editing",
+            "video_conditioned_generation",
+            "video_continuation",
+            "controlled_video_transfer",
+        }
+        assert set(config["license"]) == {"code", "weights", "commercial_use", "url"}
+        assert config["gpu"]
+        assert config["resolution"]
+
+
+def test_non_editing_local_models_are_classified_explicitly():
+    assert AVAILABLE_MODELS["ltx-2.3-dev-v2v"]["capability"] == "video_conditioned_generation"
+    assert AVAILABLE_MODELS["magi-24b-v2v"]["capability"] == "video_continuation"
+    assert AVAILABLE_MODELS["cosmos3-super-v2v"]["capability"] == "controlled_video_transfer"
+
+
+def test_noncommercial_models_are_not_marked_for_commercial_use():
+    assert AVAILABLE_MODELS["editto-v2v"]["license"]["commercial_use"] is False
+    assert AVAILABLE_MODELS["lucy-edit-1.1-v2v"]["license"]["commercial_use"] is False
 
 
 def test_fal_models_use_shared_wrapper_and_expected_endpoint():

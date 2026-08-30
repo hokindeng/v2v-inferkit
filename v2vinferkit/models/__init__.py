@@ -10,6 +10,14 @@ __all__ = [
     "MagiService", "MagiWrapper",
     "Ltx23Service", "Ltx23Wrapper",
     "Cosmos3Service", "Cosmos3Wrapper",
+    "JoyAIService", "JoyAIWrapper",
+    "BerniniService", "BerniniWrapper",
+    "KiwiService", "KiwiWrapper",
+    "EdittoService", "EdittoWrapper",
+    "SamaService", "SamaWrapper",
+    "OmniVideo2Service", "OmniVideo2Wrapper",
+    "CoinVEService", "CoinVEWrapper",
+    "LucyService", "LucyWrapper",
 ]
 
 _MODULE_MAP = {
@@ -20,6 +28,14 @@ _MODULE_MAP = {
     "magi_inference": ["MagiService", "MagiWrapper"],
     "ltx23_inference": ["Ltx23Service", "Ltx23Wrapper"],
     "cosmos3_inference": ["Cosmos3Service", "Cosmos3Wrapper"],
+    "joyai_inference": ["JoyAIService", "JoyAIWrapper"],
+    "bernini_inference": ["BerniniService", "BerniniWrapper"],
+    "kiwi_inference": ["KiwiService", "KiwiWrapper"],
+    "editto_inference": ["EdittoService", "EdittoWrapper"],
+    "sama_inference": ["SamaService", "SamaWrapper"],
+    "omnivideo2_inference": ["OmniVideo2Service", "OmniVideo2Wrapper"],
+    "coinve_inference": ["CoinVEService", "CoinVEWrapper"],
+    "lucy_inference": ["LucyService", "LucyWrapper"],
 }
 
 

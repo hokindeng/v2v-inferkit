@@ -2,7 +2,7 @@
 Base classes for v2v-inferkit model wrappers.
 
 Provides abstract interfaces to ensure consistency across all video generation
-models. The per-model venv interpreter helper lets open-source model wrappers
+models. The per-model venv interpreter helper lets local/open-weight wrappers
 locate their envs/<model>/bin/python.
 """
 

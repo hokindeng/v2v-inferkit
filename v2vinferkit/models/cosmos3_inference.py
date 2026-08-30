@@ -50,10 +50,10 @@ class Cosmos3Service:
     def __init__(self, model: str = "Cosmos3-Super"):
         # Prefer a locally staged checkpoint dir (e.g. synced from S3) over the
         # registry name, which would trigger a 132GB HF download at first run.
-        weights = Path(os.environ.get("V2V_WEIGHTS_DIR", str(_kit_root() / "weights")))
+        weights = Path(os.environ.get("V2V_WEIGHTS_DIR") or str(_kit_root() / "weights"))
         local_ckpt = weights / model
         self.checkpoint = str(local_ckpt) if local_ckpt.is_dir() else model
-        self.repo_path = Path(os.environ.get("COSMOS_REPO_PATH", str(_repo_dir())))
+        self.repo_path = Path(os.environ.get("COSMOS_REPO_PATH") or str(_repo_dir()))
         self.num_gpus = int(os.environ.get("COSMOS_NUM_GPUS", "4"))
         self.master_port = os.environ.get("COSMOS_MASTER_PORT", "29500")
 

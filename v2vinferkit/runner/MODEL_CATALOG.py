@@ -3,8 +3,8 @@
 Every model here has modality v2v: it consumes a conditioning video
 (first_video.mp4) plus a text prompt, and returns an edited/generated video.
 
-Commercial API entries need no local weights, venvs, or GPU; open-source
-entries run locally in their model-specific venv.
+Commercial API entries need no local weights, venvs, or GPU; local/open-weight
+entries run in their model-specific venv.
 """
 from typing import Any, Dict
 
@@ -253,21 +253,42 @@ GROK_MODELS = {
 }
 
 # ---------------------------------------------------------------------------
-# Open-source models (local GPU; each runs in its own venv under envs/<name>,
+# Local/open-weight models (local GPU; each runs in its own venv under envs/<name>,
 # installed via setup/install_model.sh --model <name>; weights under
 # $V2V_WEIGHTS_DIR, default <repo>/weights)
 # ---------------------------------------------------------------------------
 
 # Wan2.1-VACE-14B via diffusers WanVACEPipeline (repo CLI OOMs on <80GB GPUs)
 WAN_VACE_MODELS = {
+    "wan-vace-1.3b-v2v": {
+        "wrapper_module": "v2vinferkit.models.vace_inference",
+        "wrapper_class": "VaceWrapper",
+        "service_class": "VaceService",
+        "model": "Wan-AI/Wan2.1-VACE-1.3B-diffusers",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "Wan2.1-VACE-1.3B local V2V editing (diffusers, 480p)",
+        "family": "Wan-VACE",
+        "gpu": "1 GPU, 480p",
+        "resolution": "832x480 or 480x832",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": True, "url": "https://huggingface.co/Wan-AI/Wan2.1-VACE-1.3B-diffusers"},
+        "args": {"checkpoint_dir": "Wan2.1-VACE-1.3B-diffusers"},
+    },
     "wan-vace-14b-v2v": {
         "wrapper_module": "v2vinferkit.models.vace_inference",
         "wrapper_class": "VaceWrapper",
         "service_class": "VaceService",
         "model": "Wan-AI/Wan2.1-VACE-14B-diffusers",
         "modality": "v2v",
-        "description": "Wan2.1-VACE-14B - open-source V2V editing (diffusers, 1x48GB GPU, 480p)",
-        "family": "Wan-VACE (open-source)"
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "Wan2.1-VACE-14B local V2V editing (diffusers, 1x48GB GPU, 480p)",
+        "family": "Wan-VACE",
+        "gpu": "1x48GB, 480p",
+        "resolution": "832x480 or 480x832",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": True, "url": "https://huggingface.co/Wan-AI/Wan2.1-VACE-14B-diffusers"},
+        "args": {"checkpoint_dir": "Wan2.1-VACE-14B-diffusers"},
     },
 }
 
@@ -279,8 +300,179 @@ OMNIWEAVING_MODELS = {
         "service_class": "OmniWeavingService",
         "model": "tencent/HY-OmniWeaving",
         "modality": "v2v",
-        "description": "HY-OmniWeaving - open-source V2V editing (1 GPU w/ offload, 480p only)",
-        "family": "Hunyuan OmniWeaving (open-source)"
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "HY-OmniWeaving local V2V editing (1 GPU with offload, 480p)",
+        "family": "Hunyuan OmniWeaving",
+        "gpu": "1x14GB+ with offload, 480p",
+        "resolution": "832x480 or 480x832",
+        "license": {"code": "Apache-2.0", "weights": "Tencent Hunyuan Community License", "commercial_use": None, "url": "https://huggingface.co/tencent/HY-OmniWeaving"},
+    },
+}
+
+JOYAI_MODELS = {
+    "joyai-video-edit-v2v": {
+        "wrapper_module": "v2vinferkit.models.joyai_inference",
+        "wrapper_class": "JoyAIWrapper",
+        "service_class": "JoyAIService",
+        "model": "jd-opensource/JoyAI-Video-Edit",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "JoyAI-Video-Edit streaming instruction-based V2V editing",
+        "family": "JoyAI Video Edit",
+        "gpu": "1x32GB recommended (RTX 5090 reference)",
+        "resolution": "840x480",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": True, "url": "https://github.com/jd-opensource/JoyAI-Video-Edit"},
+    },
+}
+
+BERNINI_MODELS = {
+    "bernini-r-1.3b-v2v": {
+        "wrapper_module": "v2vinferkit.models.bernini_inference",
+        "wrapper_class": "BerniniWrapper",
+        "service_class": "BerniniService",
+        "model": "ByteDance/Bernini-R-1.3B-Diffusers",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "Bernini-R 1.3B instruction-based V2V editing",
+        "family": "Bernini-R",
+        "gpu": "1 GPU",
+        "resolution": "source-dependent",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": True, "url": "https://huggingface.co/ByteDance/Bernini-R-1.3B-Diffusers"},
+    },
+    "bernini-r-14b-v2v": {
+        "wrapper_module": "v2vinferkit.models.bernini_inference",
+        "wrapper_class": "BerniniWrapper",
+        "service_class": "BerniniService",
+        "model": "ByteDance/Bernini-R-Diffusers",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "Bernini-R 14B instruction-based V2V editing",
+        "family": "Bernini-R",
+        "gpu": "H100-class GPU recommended",
+        "resolution": "source-dependent",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": True, "url": "https://huggingface.co/ByteDance/Bernini-R-Diffusers"},
+    },
+}
+
+KIWI_MODELS = {
+    "kiwi-edit-5b-v2v": {
+        "wrapper_module": "v2vinferkit.models.kiwi_inference",
+        "wrapper_class": "KiwiWrapper",
+        "service_class": "KiwiService",
+        "model": "linyq/kiwi-edit-5b-instruct-reference-diffusers",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "Kiwi-Edit 5B instruction/reference V2V editing",
+        "family": "Kiwi-Edit",
+        "gpu": "1 GPU",
+        "resolution": "832x480 or 480x832",
+        "license": {"code": "MIT", "weights": "unspecified", "commercial_use": None, "url": "https://github.com/showlab/Kiwi-Edit"},
+    },
+}
+
+EDITTO_MODELS = {
+    "editto-v2v": {
+        "wrapper_module": "v2vinferkit.models.editto_inference",
+        "wrapper_class": "EdittoWrapper",
+        "service_class": "EdittoService",
+        "model": "QingyanBai/Ditto_models",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "Ditto/Editto VACE-14B LoRA V2V editing",
+        "family": "Ditto/Editto",
+        "gpu": "1 GPU; quantized ComfyUI reference fits about 11GB",
+        "resolution": "832x480",
+        "license": {"code": "CC-BY-NC-SA-4.0", "weights": "CC-BY-NC-SA-4.0", "commercial_use": False, "url": "https://huggingface.co/QingyanBai/Ditto_models"},
+    },
+}
+
+SAMA_MODELS = {
+    "sama-14b-v2v": {
+        "wrapper_module": "v2vinferkit.models.sama_inference",
+        "wrapper_class": "SamaWrapper",
+        "service_class": "SamaService",
+        "model": "syxbb/SAMA-14B",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "SAMA-14B semantic V2V editing",
+        "family": "SAMA",
+        "gpu": "1 high-memory GPU",
+        "resolution": "832x480",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": True, "url": "https://huggingface.co/syxbb/SAMA-14B"},
+    },
+}
+
+OMNIVIDEO2_MODELS = {
+    "omnivideo2-1.3b-v2v": {
+        "wrapper_module": "v2vinferkit.models.omnivideo2_inference",
+        "wrapper_class": "OmniVideo2Wrapper",
+        "service_class": "OmniVideo2Service",
+        "model": "Fudan-FUXI/OmniVideo2-1.3B",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "OmniVideo2 1.3B VLM-conditioned V2V editing",
+        "family": "OmniVideo2",
+        "gpu": "1 GPU with component offload",
+        "resolution": "832x480",
+        "license": {"code": "unspecified", "weights": "unspecified", "commercial_use": None, "url": "https://huggingface.co/Fudan-FUXI/OmniVideo2-1.3B"},
+        "args": {"task": "v2v-1.3B"},
+    },
+    "omnivideo2-a14b-v2v": {
+        "wrapper_module": "v2vinferkit.models.omnivideo2_inference",
+        "wrapper_class": "OmniVideo2Wrapper",
+        "service_class": "OmniVideo2Service",
+        "model": "Fudan-FUXI/OmniVideo2-A14B",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "OmniVideo2 A14B VLM-conditioned V2V editing",
+        "family": "OmniVideo2",
+        "gpu": "1x80GB recommended",
+        "resolution": "832x480",
+        "license": {"code": "unspecified", "weights": "unspecified", "commercial_use": None, "url": "https://huggingface.co/Fudan-FUXI/OmniVideo2-A14B"},
+        "args": {"task": "v2v-A14B"},
+    },
+}
+
+COINVE_MODELS = {
+    "coinve-edit-v2v": {
+        "wrapper_module": "v2vinferkit.models.coinve_inference",
+        "wrapper_class": "CoinVEWrapper",
+        "service_class": "CoinVEService",
+        "model": "FireCRT/CoinVE-Edit",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "CoinVE multi-instruction V2V editing",
+        "family": "CoinVE",
+        "gpu": "about 54GB at 720p/49 frames (official H200 reference)",
+        "resolution": "up to 720p",
+        "license": {"code": "MIT", "weights": "Apache-2.0", "commercial_use": True, "url": "https://huggingface.co/FireCRT/CoinVE-Edit"},
+    },
+}
+
+LUCY_MODELS = {
+    "lucy-edit-1.1-v2v": {
+        "wrapper_module": "v2vinferkit.models.lucy_inference",
+        "wrapper_class": "LucyWrapper",
+        "service_class": "LucyService",
+        "model": "decart-ai/Lucy-Edit-1.1-Dev",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "Lucy-Edit 1.1 Dev 5B instruction-based V2V editing (non-commercial)",
+        "family": "Lucy-Edit",
+        "gpu": "1 GPU with CPU offload",
+        "resolution": "832x480",
+        "license": {"code": "proprietary", "weights": "Lucy Edit Dev Non-Commercial License", "commercial_use": False, "url": "https://huggingface.co/decart-ai/Lucy-Edit-1.1-Dev"},
     },
 }
 
@@ -294,8 +486,13 @@ MAGI_MODELS = {
         "service_class": "MagiService",
         "model": "sand-ai/MAGI-1:24B_base",
         "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_continuation",
         "description": "MAGI-1 24B - video CONTINUATION (not editing); needs 4x80GB+ GPUs",
-        "family": "MAGI (open-source)"
+        "family": "MAGI",
+        "gpu": "4x80GB+",
+        "resolution": "model-defined",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": True, "url": "https://huggingface.co/sand-ai/MAGI-1"},
     },
 }
 
@@ -310,8 +507,13 @@ LTX23_MODELS = {
         "service_class": "Ltx23Service",
         "model": "Lightricks/LTX-2.3:ic-lora",
         "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_conditioned_generation",
         "description": "LTX-2.3 IC-LoRA video conditioning (official v2v is distilled-only - pending ruling)",
-        "family": "LTX (open-source)"
+        "family": "LTX",
+        "gpu": "1x48GB fp8 or 1x80GB bf16",
+        "resolution": "model-defined",
+        "license": {"code": "Apache-2.0", "weights": "LTX-2 Community License Agreement", "commercial_use": None, "url": "https://huggingface.co/Lightricks/LTX-2.3"},
     },
 }
 
@@ -323,8 +525,13 @@ COSMOS3_MODELS = {
         "service_class": "Cosmos3Service",
         "model": "Cosmos3-Super",
         "modality": "v2v",
+        "deployment": "local",
+        "capability": "controlled_video_transfer",
         "description": "Cosmos3-Super video transfer - open-source V2V (needs 4x80GB GPUs, 132GB ckpt)",
-        "family": "NVIDIA Cosmos (open-source)"
+        "family": "NVIDIA Cosmos",
+        "gpu": "4x80GB, 132GB checkpoint",
+        "resolution": "model-defined",
+        "license": {"code": "Apache-2.0", "weights": "OpenMDW 1.1", "commercial_use": None, "url": "https://huggingface.co/nvidia/Cosmos3-Super"},
     },
 }
 
@@ -341,6 +548,14 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
     **GROK_MODELS,
     **WAN_VACE_MODELS,
     **OMNIWEAVING_MODELS,
+    **JOYAI_MODELS,
+    **BERNINI_MODELS,
+    **KIWI_MODELS,
+    **EDITTO_MODELS,
+    **SAMA_MODELS,
+    **OMNIVIDEO2_MODELS,
+    **COINVE_MODELS,
+    **LUCY_MODELS,
     **MAGI_MODELS,
     **LTX23_MODELS,
     **COSMOS3_MODELS,
@@ -357,11 +572,19 @@ MODEL_FAMILIES: Dict[str, Dict[str, Dict[str, Any]]] = {
     "Seedance": SEEDANCE_MODELS,
     "Happy Horse": HAPPY_HORSE_MODELS,
     "Grok Imagine": GROK_MODELS,
-    "Wan-VACE (open-source)": WAN_VACE_MODELS,
-    "Hunyuan OmniWeaving (open-source)": OMNIWEAVING_MODELS,
-    "MAGI (open-source)": MAGI_MODELS,
-    "LTX (open-source)": LTX23_MODELS,
-    "NVIDIA Cosmos (open-source)": COSMOS3_MODELS,
+    "Wan-VACE": WAN_VACE_MODELS,
+    "Hunyuan OmniWeaving": OMNIWEAVING_MODELS,
+    "JoyAI Video Edit": JOYAI_MODELS,
+    "Bernini-R": BERNINI_MODELS,
+    "Kiwi-Edit": KIWI_MODELS,
+    "Ditto/Editto": EDITTO_MODELS,
+    "SAMA": SAMA_MODELS,
+    "OmniVideo2": OMNIVIDEO2_MODELS,
+    "CoinVE": COINVE_MODELS,
+    "Lucy-Edit": LUCY_MODELS,
+    "LTX video-conditioned generation": LTX23_MODELS,
+    "MAGI video continuation": MAGI_MODELS,
+    "NVIDIA Cosmos controlled transfer": COSMOS3_MODELS,
 }
 
 

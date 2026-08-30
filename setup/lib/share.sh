@@ -20,13 +20,27 @@ export WEIGHTS_DIR="${V2V_WEIGHTS_DIR:-${V2V_ROOT}/weights}"
 # MODEL REGISTRY
 # ============================================================================
 
-declare -a OPENSOURCE_MODELS=(
+declare -a LOCAL_MODELS=(
+    "wan-vace-1.3b-v2v"
     "wan-vace-14b-v2v"
     "hy-omniweaving-v2v"
+    "joyai-video-edit-v2v"
+    "bernini-r-1.3b-v2v"
+    "bernini-r-14b-v2v"
+    "kiwi-edit-5b-v2v"
+    "editto-v2v"
+    "sama-14b-v2v"
+    "omnivideo2-1.3b-v2v"
+    "omnivideo2-a14b-v2v"
+    "coinve-edit-v2v"
+    "lucy-edit-1.1-v2v"
     "magi-24b-v2v"
     "ltx-2.3-dev-v2v"
     "cosmos3-super-v2v"
 )
+
+# Backward-compatible name used by older setup callers.
+declare -a OPENSOURCE_MODELS=("${LOCAL_MODELS[@]}")
 
 declare -a COMMERCIAL_MODELS=(
     "runway-aleph-v2v"
@@ -70,6 +84,10 @@ is_opensource_model() {
         [[ "$model" == "$target" ]] && return 0
     done
     return 1
+}
+
+is_local_model() {
+    is_opensource_model "$1"
 }
 
 is_commercial_model() {
@@ -129,6 +147,7 @@ activate_model_venv() {
 
 create_model_venv() {
     local model="$1"
+    local python_bin="${2:-${MODEL_PYTHON:-python3}}"
     local venv_path
     venv_path="$(get_model_venv_path "$model")"
 
@@ -141,7 +160,11 @@ create_model_venv() {
 
     print_step "Creating virtual environment: ${model}"
     mkdir -p "${ENVS_DIR}"
-    python3 -m venv "$venv_path"
+    if ! command -v "$python_bin" >/dev/null 2>&1; then
+        print_error "Python interpreter not found: ${python_bin}"
+        return 1
+    fi
+    "$python_bin" -m venv "$venv_path"
 
     source "${venv_path}/bin/activate"
     pip install -q --upgrade pip setuptools wheel
@@ -182,6 +205,7 @@ download_hf_checkpoint() {
     local repo_id="$1"
     local dest="${WEIGHTS_DIR}/$2"
     local size_desc="${3:-}"
+    local hf_bin=""
 
     if [[ -d "$dest" ]] && [[ -n "$(ls -A "$dest" 2>/dev/null)" ]]; then
         print_skip "Checkpoint exists: $2"
@@ -190,7 +214,15 @@ download_hf_checkpoint() {
 
     print_download "Downloading ${repo_id} ${size_desc:+- ${size_desc}}"
     mkdir -p "$dest"
-    hf download "$repo_id" --local-dir "$dest"
+    if command -v hf >/dev/null 2>&1; then
+        hf_bin="$(command -v hf)"
+    elif [[ -n "${MODEL:-}" ]] && [[ -x "${ENVS_DIR}/${MODEL}/bin/hf" ]]; then
+        hf_bin="${ENVS_DIR}/${MODEL}/bin/hf"
+    else
+        print_error "Hugging Face CLI not found; install huggingface_hub[cli]"
+        return 1
+    fi
+    "$hf_bin" download "$repo_id" --local-dir "$dest"
     print_success "Checkpoint ready: $2"
 }
 
@@ -219,7 +251,7 @@ load_env_file() {
 validate_model() {
     local model="$1"
     local test_output="${V2V_ROOT}/test_outputs"
-    local timeout_seconds=10800  # 3 hours (open-source flagship models are slow)
+    local timeout_seconds=10800  # 3 hours (local flagship models are slow)
 
     print_step "Validating ${model} on the turntable smoke test... (timeout: ${timeout_seconds}s)"
     echo ""

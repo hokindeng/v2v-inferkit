@@ -45,7 +45,7 @@ def _kit_root() -> Path:
 
 
 def _default_model_path() -> Path:
-    weights = os.environ.get("V2V_WEIGHTS_DIR", str(_kit_root() / "weights"))
+    weights = os.environ.get("V2V_WEIGHTS_DIR") or str(_kit_root() / "weights")
     return Path(weights) / "HY-OmniWeaving"
 
 
@@ -96,8 +96,8 @@ class OmniWeavingService:
 
     def __init__(self, model: str = "tencent/HY-OmniWeaving"):
         self.model_id = model
-        self.model_path = Path(os.environ.get("OMNIWEAVING_MODEL_PATH", str(_default_model_path())))
-        self.repo_path = Path(os.environ.get("OMNIWEAVING_REPO_PATH", str(_default_repo_path())))
+        self.model_path = Path(os.environ.get("OMNIWEAVING_MODEL_PATH") or str(_default_model_path()))
+        self.repo_path = Path(os.environ.get("OMNIWEAVING_REPO_PATH") or str(_default_repo_path()))
 
     def generate_video(
         self,

@@ -240,7 +240,7 @@ def print_model_list() -> None:
     for name, info in AVAILABLE_MODELS.items():
         print(f"  {name:30} - {info.get('description', '')}")
     print(f"\nTotal: {len(AVAILABLE_MODELS)} models (all video-to-video; "
-          f"commercial APIs + open-source local-GPU models)")
+          f"commercial APIs + local/open-weight GPU models)")
 
 
 def main() -> int:

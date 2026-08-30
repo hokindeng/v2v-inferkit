@@ -1,6 +1,6 @@
 """v2v-inferkit — unified inference toolkit for video-to-video models.
 
-Ten V2V models — five commercial APIs and five open-source — that take a
+Thirty-two V2V models — sixteen commercial APIs and sixteen local/open-weight — that take a
 conditioning video plus a text prompt and return an edited video.
 """
 

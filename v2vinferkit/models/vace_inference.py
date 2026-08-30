@@ -1,4 +1,4 @@
-"""Wan2.1-VACE-14B video-to-video inference (open-source, local GPU).
+"""Wan2.1-VACE 1.3B/14B video-to-video inference (local GPU).
 
 Runs the diffusers WanVACEPipeline rather than the ali-vilab/VACE repo CLI:
 the repo CLI keeps DiT + doubled VACE context latents + CFG batch resident and
@@ -35,17 +35,22 @@ _OUTPUT_FPS = 16
 _SIZES = {"landscape": (832, 480), "portrait": (480, 832)}
 
 
-def _default_weights_dir() -> Path:
+def _default_weights_dir(checkpoint_dir: str) -> Path:
     root = Path(__file__).parent.parent.parent
-    weights = os.environ.get("V2V_WEIGHTS_DIR", str(root / "weights"))
-    return Path(weights) / "Wan2.1-VACE-14B-diffusers"
+    weights = os.environ.get("V2V_WEIGHTS_DIR") or str(root / "weights")
+    return Path(weights) / checkpoint_dir
 
 
 class VaceService:
     """Loads WanVACEPipeline once and serves v2v generations."""
 
-    def __init__(self, model: str = "Wan-AI/Wan2.1-VACE-14B-diffusers"):
+    def __init__(
+        self,
+        model: str = "Wan-AI/Wan2.1-VACE-14B-diffusers",
+        checkpoint_dir: Optional[str] = None,
+    ):
         self.model_id = model
+        self.checkpoint_dir = checkpoint_dir or model.rsplit("/", 1)[-1]
         self.pipe = None
 
     def _load_model(self):
@@ -54,7 +59,7 @@ class VaceService:
         import torch
         from diffusers import AutoencoderKLWan, WanVACEPipeline, UniPCMultistepScheduler
 
-        local_dir = _default_weights_dir()
+        local_dir = _default_weights_dir(self.checkpoint_dir)
         source = str(local_dir) if local_dir.exists() else self.model_id
 
         # fp32 VAE is deliberate (quality); transformer in bf16
@@ -154,16 +159,17 @@ class VaceService:
 
 
 class VaceWrapper(ModelWrapper):
-    """v2v-inferkit wrapper for Wan2.1-VACE-14B (diffusers pipeline)."""
+    """v2v-inferkit wrapper for Wan2.1-VACE diffusers checkpoints."""
 
     def __init__(
         self,
         model: str = "Wan-AI/Wan2.1-VACE-14B-diffusers",
         output_dir: str = "./outputs",
+        checkpoint_dir: Optional[str] = None,
         **kwargs,
     ):
         super().__init__(model=model, output_dir=output_dir, **kwargs)
-        self.service = VaceService(model=model)
+        self.service = VaceService(model=model, checkpoint_dir=checkpoint_dir)
 
     def generate(
         self,
@@ -180,7 +186,7 @@ class VaceWrapper(ModelWrapper):
             return {
                 "success": False,
                 "video_path": None,
-                "error": "wan-vace-14b-v2v is video-to-video only: video_path is required",
+                "error": f"{self.model} is video-to-video only: video_path is required",
                 "duration_seconds": 0.0,
                 "generation_id": None,
                 "model": self.model,

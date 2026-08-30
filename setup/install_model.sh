@@ -1,6 +1,6 @@
 #!/bin/bash
 ##############################################################################
-# Install and test models (individual or all open-source)
+# Install and test models (individual or all local/open-weight)
 #
 # A model directory may ship a setup.sh (repo clones, multi-part checkpoints,
 # custom pip steps) — when present it is used instead of the bare
@@ -10,7 +10,7 @@
 #   ./setup/install_model.sh --list
 #   ./setup/install_model.sh --model wan-vace-14b-v2v
 #   ./setup/install_model.sh --model wan-vace-14b-v2v --validate
-#   ./setup/install_model.sh --opensource
+#   ./setup/install_model.sh --local
 ##############################################################################
 
 set -euo pipefail
@@ -20,11 +20,12 @@ source "${SCRIPT_DIR}/lib/share.sh"
 
 usage() {
     cat <<USAGE
-Usage: $(basename "$0") [--model <name>|--opensource] [--validate]
+Usage: $(basename "$0") [--model <name>|--local|--opensource] [--validate]
 
 Options:
   --model <name>       Model name (install single model)
-  --opensource         Install all open-source models
+  --local              Install all local/open-weight models
+  --opensource         Backward-compatible alias for --local
   --list               List all available models
   --validate           Test model(s) after installation (runs the turntable
                        smoke task — needs GPU + downloaded weights)
@@ -39,9 +40,9 @@ USAGE
 list_models() {
     print_header "Available Models"
 
-    echo "OPEN-SOURCE MODELS (${#OPENSOURCE_MODELS[@]}) — install with this script:"
+    echo "LOCAL / OPEN-WEIGHT MODELS (${#LOCAL_MODELS[@]}) — install with this script:"
     echo ""
-    for model in "${OPENSOURCE_MODELS[@]}"; do
+    for model in "${LOCAL_MODELS[@]}"; do
         echo "  • ${model}"
     done
 
@@ -66,7 +67,7 @@ while [[ $# -gt 0 ]]; do
             MODEL="$2"
             shift 2
             ;;
-        --opensource)
+        --local|--opensource)
             INSTALL_OPENSOURCE=true
             shift
             ;;
@@ -102,15 +103,15 @@ fi
 
 MODELS_TO_INSTALL=()
 if [[ "$INSTALL_OPENSOURCE" == "true" ]]; then
-    print_header "Installing all open-source models"
-    MODELS_TO_INSTALL=("${OPENSOURCE_MODELS[@]}")
+    print_header "Installing all local/open-weight models"
+    MODELS_TO_INSTALL=("${LOCAL_MODELS[@]}")
 else
     if is_commercial_model "$MODEL"; then
         print_info "${MODEL} is a commercial API model — nothing to install."
         print_info "Set $(get_commercial_env_var "$MODEL") in .env and run it directly."
         exit 0
     fi
-    if ! is_opensource_model "$MODEL"; then
+    if ! is_local_model "$MODEL"; then
         print_error "Unknown model: ${MODEL}"
         exit 1
     fi
