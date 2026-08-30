@@ -110,7 +110,8 @@ python3 run.py --model runway-aleph-v2v \
 ```
 
 Add `--dry-run` to see the planned jobs without calling any API.
-ffmpeg must be on PATH (used to pad too-short input videos).
+ffmpeg must be on PATH (used to front-pad too-short input videos by cloning
+their first frame — the clip's ending is never touched).
 Run run.py from the repo root — it is not installed as a console script.
 
 ## Task layout

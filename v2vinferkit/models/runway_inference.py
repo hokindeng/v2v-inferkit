@@ -131,43 +131,22 @@ class RunwayService:
         return best_ratio
 
     def _ensure_min_duration(self, video_path: str, min_seconds: float = 2.0) -> str:
-        import subprocess, tempfile, math
-        probe = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v",
-             "-show_entries", "stream=nb_frames,r_frame_rate",
-             "-show_entries", "format=duration",
-             "-of", "csv=p=0", video_path],
-            capture_output=True, text=True
-        )
-        lines = [l.strip() for l in probe.stdout.strip().split("\n") if l.strip()]
-        duration = float(lines[-1]) if lines else 0
+        """Front-pad a too-short clip by cloning its first frame.
+
+        Shares the fal adapter's padder so every hosted model treats short
+        inputs the same way: the hold is added at the start, the ending (where
+        a continuation must pick up) and the motion timing are untouched. The
+        previous slow-motion stretch changed every velocity in the clip.
+        """
+        from pathlib import Path
+        from .fal_v2v_inference import _pad_video, _probe_video_duration
+
+        duration = _probe_video_duration(video_path)
         if duration >= min_seconds:
             return video_path
-        fps_str, nb_frames = None, None
-        for line in lines:
-            if "/" in line:
-                parts = line.split(",")
-                fps_str = parts[0]
-                if len(parts) > 1:
-                    nb_frames = int(parts[1])
-            elif line.replace(".", "").isdigit() and "." in line:
-                pass
-        if not nb_frames or nb_frames <= 0:
-            return video_path
-        target_fps = max(1, math.floor(nb_frames / min_seconds))
-        num, den = (int(x) for x in fps_str.split("/")) if fps_str and "/" in fps_str else (12, 1)
-        orig_fps = num / den
-        slow_factor = orig_fps / target_fps
-        out = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", video_path,
-             "-filter:v", f"setpts=PTS*{slow_factor}",
-             "-r", str(target_fps),
-             "-c:v", "libx264", "-preset", "fast", "-crf", "18", out],
-            capture_output=True
-        )
-        logger.info(f"Stretched {nb_frames} frames from {duration:.1f}s to {nb_frames/target_fps:.1f}s (fps {orig_fps}->{target_fps})")
-        return out
+        out = _pad_video(Path(video_path), duration, min_seconds)
+        logger.info(f"Front-padded {duration:.2f}s input to {min_seconds:.2f}s by cloning its first frame")
+        return str(out)
 
     def _resize_and_pad_image(self, image_path: Union[str, Path], target_ratio: str) -> Path:
         """

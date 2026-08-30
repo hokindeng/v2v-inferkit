@@ -218,6 +218,28 @@ def test_prepare_input_pads_short_video(monkeypatch, tmp_path):
     assert is_temp is True
 
 
+def test_pad_video_clones_first_frame_in_front(monkeypatch, tmp_path):
+    captured = {}
+
+    class Done:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return Done()
+
+    monkeypatch.setattr(module.shutil, "which", lambda _: "/usr/bin/ffmpeg")
+    monkeypatch.setattr(module, "_has_audio_stream", lambda _: False)
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    module._pad_video(tmp_path / "input.mp4", 2.5, 3.0)
+
+    vf = captured["cmd"][captured["cmd"].index("-vf") + 1]
+    assert vf == "tpad=start_mode=clone:start_duration=0.500"
+    assert "stop_mode" not in vf
+
+
 def test_queue_submit_polls_to_completion(monkeypatch):
     class InProgress:
         pass

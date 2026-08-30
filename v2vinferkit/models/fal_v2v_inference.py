@@ -301,7 +301,14 @@ def _has_audio_stream(video_path: Union[str, Path]) -> bool:
 
 
 def _pad_video(video_path: Path, source_duration: float, target_duration: float) -> Path:
-    """Extend a short clip by cloning its final frame (and padding audio)."""
+    """Extend a short clip by cloning its FIRST frame in front of it.
+
+    The padding goes at the start, never the end: a benchmark clip ends at the
+    moment a continuation has to pick up, and cloning the last frame there
+    would show the model a frozen scene exactly where the event goes on. The
+    opening frames are an establishing shot, so a longer hold there changes
+    nothing. Audio (if any) is delayed by the same amount.
+    """
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg is required to pad a too-short fal V2V input")
 
@@ -310,9 +317,9 @@ def _pad_video(video_path: Path, source_duration: float, target_duration: float)
     output_path = Path(handle.name)
     padding = max(0.0, target_duration - source_duration)
     cmd = ["ffmpeg", "-y", "-i", str(video_path), "-map", "0:v:0", "-map", "0:a?"]
-    cmd += ["-vf", f"tpad=stop_mode=clone:stop_duration={padding:.3f}"]
+    cmd += ["-vf", f"tpad=start_mode=clone:start_duration={padding:.3f}"]
     if _has_audio_stream(video_path):
-        cmd += ["-af", f"apad=pad_dur={padding:.3f}", "-c:a", "aac"]
+        cmd += ["-af", f"adelay={int(round(padding * 1000))}:all=1", "-c:a", "aac"]
     cmd += [
         "-t",
         f"{target_duration:.3f}",

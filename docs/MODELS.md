@@ -15,7 +15,8 @@ covers every commercial integration except Runway Aleph.
 ### Runway
 
 `runway-aleph-v2v` uses `RUNWAYML_API_SECRET`; fal.ai does not currently expose
-the Aleph endpoint. Inputs under 2 seconds are padded before submission.
+the Aleph endpoint. Inputs under 2 seconds are padded before submission
+(front-padded by cloning the first frame, same as the fal adapter).
 
 ### Shared fal.ai integrations
 
@@ -121,7 +122,10 @@ does not mean commercial use is allowed.
 - fal-hosted inputs transit hosted storage. Do not submit sensitive
   material unless that data handling is acceptable.
 - `ffprobe` is required for hosted-input validation and `ffmpeg` is required
-  when a source needs minimum-duration padding.
+  when a source needs minimum-duration padding. Padding is always added at the
+  **front** by cloning the first frame: a benchmark clip ends where the
+  continuation has to pick up, so the ending and the motion timing are never
+  altered; only the opening hold gets longer.
 - H3 Max, Happy Horse 1.1, and Grok Imagine Video 1.5 are not cataloged as V2V
   entries because their currently published endpoints do not accept a source
   video for editing. Add them when a real video-input endpoint becomes live.
