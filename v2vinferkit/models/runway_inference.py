@@ -24,6 +24,21 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
+# Runway's promptText limit for aleph2. A benchmark prompt is never silently
+# truncated: if it does not fit, the task is refused and recorded as such.
+_PROMPT_MAX_CHARS = 1000
+
+
+class RunwayTaskError(Exception):
+    """A Runway task was created (and billed) but produced no usable output.
+
+    Carries the task id so the job can be traced in the Runway dashboard.
+    """
+
+    def __init__(self, task_id: Optional[str], message: str) -> None:
+        self.task_id = task_id
+        super().__init__(f"Runway task {task_id or '<not created>'}: {message}")
+
 
 class RunwayService:
     """Service for image-to-video generation using Runway ML models."""
@@ -295,6 +310,8 @@ class RunwayService:
         duration: Optional[int] = None,
         ratio: Optional[str] = None,
         output_path: Optional[Path] = None,
+        seed: Optional[int] = None,
+        max_wait: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Generate a video from text prompt + input video (Aleph video-to-video).
@@ -320,14 +337,31 @@ class RunwayService:
         # input video. `duration` is accepted/ignored here only for interface symmetry
         # with i2v; it is never forwarded to the v2v endpoint.
 
-        if len(prompt) > 1000:
-            prompt = prompt[:997] + "..."
+        if len(prompt) > _PROMPT_MAX_CHARS:
+            raise ValueError(
+                f"prompt is {len(prompt)} characters; Runway {self.model} accepts at most "
+                f"{_PROMPT_MAX_CHARS}. Refusing rather than truncating a benchmark prompt."
+            )
 
         adapted_path = self._ensure_min_duration(str(video_path), min_seconds=2.0)
+        source_duration = None
+        try:
+            from .fal_v2v_inference import _probe_video_duration
+            source_duration = _probe_video_duration(str(video_path))
+        except Exception:
+            pass
         try:
             video_uri = await self._upload_file(adapted_path)
 
-            result = await self._generate_v2v_with_runway(prompt, video_uri, ratio)
+            result = await self._generate_v2v_with_runway(
+                prompt, video_uri, ratio, seed=seed, max_wait=max_wait
+            )
+            result["prompt_sent"] = prompt
+            result["seed_sent"] = seed
+            result["source_duration"] = source_duration
+            result["input_padded_seconds"] = (
+                round(2.0 - source_duration, 3) if (adapted_path != str(video_path) and source_duration) else 0.0
+            )
 
             if output_path and result.get("video_url"):
                 saved_path = await self._download_video(result["video_url"], output_path)
@@ -349,16 +383,24 @@ class RunwayService:
                     pass
 
     async def _generate_v2v_with_runway(
-        self, prompt: str, video_uri: str, ratio: Optional[str]
+        self,
+        prompt: str,
+        video_uri: str,
+        ratio: Optional[str],
+        seed: Optional[int] = None,
+        max_wait: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Call the Runway SDK video_to_video endpoint (model='aleph2').
 
         Aleph derives output length from the input video, so no `duration` is sent.
+        Every failure after task creation raises RunwayTaskError with the task id.
         """
         try:
-            from runwayml import RunwayML, TaskFailedError
+            from runwayml import RunwayML, TaskFailedError, TaskTimeoutError
         except ImportError:
             raise ImportError("runwayml package not installed. Run: pip install runwayml")
+
+        timeout = 1800.0 if max_wait is None else float(max_wait)
 
         def _sync_generate():
             client = RunwayML()
@@ -369,19 +411,30 @@ class RunwayService:
             }
             if ratio:
                 params["ratio"] = ratio
+            if seed is not None:
+                params["seed"] = int(seed)
+            created = client.video_to_video.create(**params)
+            task_id = getattr(created, "id", None)
             try:
-                task = client.video_to_video.create(**params).wait_for_task_output()
-                video_url = None
-                if getattr(task, "output", None):
-                    video_url = task.output[0] if isinstance(task.output, list) else task.output
-                return {
-                    "task_id": getattr(task, "id", "unknown"),
-                    "video_url": video_url,
-                    "status": "success",
-                }
+                task = created.wait_for_task_output(timeout=timeout)
+            except TaskTimeoutError as e:
+                details = getattr(e, "task_details", None)
+                raise RunwayTaskError(task_id or getattr(details, "id", None),
+                                      f"did not finish within {timeout:g}s (task may still be billing)")
             except TaskFailedError as e:
-                logger.error(f"Runway Aleph v2v task failed: {e.task_details}")
-                raise Exception(f"Runway Aleph v2v generation failed: {e.task_details}")
+                details = getattr(e, "task_details", None)
+                raise RunwayTaskError(task_id or getattr(details, "id", None), f"failed: {details}")
+            video_url = None
+            if getattr(task, "output", None):
+                video_url = task.output[0] if isinstance(task.output, list) else task.output
+            if not video_url:
+                raise RunwayTaskError(task_id or getattr(task, "id", None), "succeeded but returned no output URL")
+            return {
+                "task_id": task_id or getattr(task, "id", "unknown"),
+                "video_url": video_url,
+                "status": "success",
+                "params_sent": {k: v for k, v in params.items() if k != "video_uri"},
+            }
 
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, _sync_generate)
@@ -484,14 +537,20 @@ class RunwayService:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         import httpx
-        async with httpx.AsyncClient(timeout=600.0) as client:  # 10 minute timeout for download
-            response = await client.get(video_url)
-            if response.status_code != 200:
-                raise Exception(f"Failed to download video: {response.status_code}")
-            
-            with open(output_path, "wb") as f:
-                f.write(response.content)
-        
+        part_path = output_path.with_name(output_path.name + ".part")
+        try:
+            async with httpx.AsyncClient(timeout=600.0, follow_redirects=True) as client:
+                response = await client.get(video_url)
+                if response.status_code != 200:
+                    raise Exception(f"Failed to download video: {response.status_code}")
+                if not response.content:
+                    raise Exception("downloaded video is empty (0 bytes)")
+                with open(part_path, "wb") as f:
+                    f.write(response.content)
+            part_path.replace(output_path)
+        except Exception:
+            part_path.unlink(missing_ok=True)
+            raise
         return output_path
 
 
@@ -562,6 +621,9 @@ class RunwayWrapper(ModelWrapper):
         output_path = self.output_dir / output_filename
 
         is_v2v = video_path is not None
+        seed = kwargs.get("seed")
+        max_wait = kwargs.get("max_wait")
+        task_id_on_failure = None
         try:
             if is_v2v:
                 result = asyncio.run(
@@ -571,8 +633,17 @@ class RunwayWrapper(ModelWrapper):
                         duration=duration_int,
                         ratio=ratio,
                         output_path=output_path,
+                        seed=seed,
+                        max_wait=max_wait,
                     )
                 )
+                if result.get("video_path"):
+                    from .fal_v2v_inference import _probe_video_geometry
+                    try:
+                        result["output_geometry"] = _probe_video_geometry(result["video_path"])
+                    except Exception as exc:
+                        Path(result["video_path"]).unlink(missing_ok=True)
+                        raise RunwayTaskError(result.get("task_id"), f"downloaded video failed validation: {exc}")
             else:
                 result = asyncio.run(
                     self.runway_service.generate_video(
@@ -585,16 +656,20 @@ class RunwayWrapper(ModelWrapper):
                 )
         except Exception as e:
             logger.error(f"Runway generation failed: {e}")
+            task_id_on_failure = getattr(e, "task_id", None)
             return {
                 "success": False,
                 "video_path": None,
                 "error": str(e),
                 "duration_seconds": time.time() - start_time,
-                "generation_id": None,
+                "generation_id": task_id_on_failure,
                 "model": self.model,
                 "status": "failed",
                 "metadata": {
-                    "prompt": text_prompt,
+                    "provider": "runway",
+                    "task_id": task_id_on_failure,
+                    "prompt_original": text_prompt,
+                    "seed": seed,
                     "modality": "v2v" if is_v2v else "i2v",
                     "image_path": None if is_v2v else str(image_path),
                     "video_path_input": str(video_path) if is_v2v else None,
@@ -602,23 +677,32 @@ class RunwayWrapper(ModelWrapper):
             }
 
         duration_taken = time.time() - start_time
+        ok = bool(result.get("video_path"))
 
         return {
-            "success": bool(result.get("video_path")),
+            "success": ok,
             "video_path": result.get("video_path"),
-            "error": None,
+            "error": None if ok else "Runway returned no video",
             "duration_seconds": duration_taken,
             "generation_id": result.get("task_id", 'unknown'),
             "model": self.model,
-            "status": "success" if result.get("video_path") else "failed",
+            "status": "success" if ok else "failed",
             "metadata": {
-                "prompt": text_prompt,
+                "provider": "runway",
+                "task_id": result.get("task_id"),
+                "prompt_original": text_prompt,
+                "prompt_sent": result.get("prompt_sent", text_prompt),
+                "payload": result.get("params_sent"),
+                "seed": result.get("seed_sent", seed),
                 "modality": "v2v" if is_v2v else "i2v",
                 "image_path": None if is_v2v else str(image_path),
                 "video_path_input": str(video_path) if is_v2v else None,
                 "video_url": result.get("video_url"),
-                "duration": duration_int,
+                # aleph2 never receives a duration: the output follows the input.
+                "duration": None if is_v2v else duration_int,
+                "source_duration": result.get("source_duration"),
+                "input_padded_seconds": result.get("input_padded_seconds"),
+                "output_geometry": result.get("output_geometry"),
                 "ratio": result.get("ratio"),
-                "runway_result": result
             }
         }

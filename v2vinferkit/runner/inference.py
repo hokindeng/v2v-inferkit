@@ -272,11 +272,17 @@ class InferenceRunner:
             )
         else:
             wrapper = self._get_or_create_wrapper(model_name)
-            wrapper.output_dir = domain_dir
+            # Hosted wrappers join output_dir / output_filename; an absolute
+            # filename wins, so the wrapper object stays untouched and one cached
+            # wrapper can serve concurrent tasks in different domain folders.
+            generation_kwargs.setdefault("output_filename", str((domain_dir / f"{task_id}.mp4").resolve()))
             result = wrapper.generate(image_path, text_prompt, **generation_kwargs)
 
         self._rename_video_to_task_id(domain_dir, task_id, result)
-        print(f"\nInference complete: {domain_dir / f'{task_id}.mp4'}")
+        if result.get("status") == "failed" or not result.get("video_path"):
+            print(f"\nInference FAILED: {domain_dir / task_id} — {result.get('error')}")
+        else:
+            print(f"\nInference complete: {result['video_path']}")
         return result
 
     def _rename_video_to_task_id(self, domain_dir: Path, task_id: str, result: Dict[str, Any]):

@@ -1,6 +1,6 @@
 # Models
 
-The catalog contains 33 video-to-video models: seventeen commercial APIs and
+The catalog contains 35 video-to-video models: nineteen commercial APIs and
 sixteen local/open-weight integrations. Every wrapper consumes the task prompt
 plus `video_path` and returns the standard eight fields (`success`,
 `video_path`, `error`, `duration_seconds`, `generation_id`, `model`, `status`,
@@ -16,7 +16,9 @@ covers every commercial integration except Runway Aleph.
 
 `runway-aleph-v2v` uses `RUNWAYML_API_SECRET`; fal.ai does not currently expose
 the Aleph endpoint. Inputs under 2 seconds are padded before submission
-(front-padded by cloning the first frame, same as the fal adapter).
+(front-padded by cloning the first frame, same as the fal adapter). Prompts
+over 1000 characters are refused, never truncated. `seed` is forwarded; the
+task id is kept on every failure and timeout (`RunwayTaskError`).
 
 ### Shared fal.ai integrations
 
@@ -43,17 +45,28 @@ silently truncate a paid benchmark run.
 | `kling-o3-pro-video-edit` | `fal-ai/kling-video/o3/pro/video-to-video/edit` | Source 3–15s; original audio retained. |
 | `happy-horse-1.0-video-edit` | `alibaba/happy-horse/video-edit` | 720p; original audio retained; benchmark guard ≤15s because output is capped at 15s. |
 | `grok-imagine-video-edit` | `xai/grok-imagine-video/edit-video` | 720p; source ≤8s because the API otherwise truncates it. |
-| `grok-imagine-video-extend` | `xai/grok-imagine-video/extend-video` | Continuation, not an edit: new frames after the source's last frame at the source resolution. Source 2–15s MP4. `duration` = extension seconds (fal default 6); when a task ships `ground_truth.mp4` the runner sends its length instead, rounded up. |
+| `grok-imagine-video-extend` | `xai/grok-imagine-video/extend-video` | Continuation: `duration` = extension seconds, integer 2–10, derived from `ground_truth.mp4` (rounded up; refused when no ground truth). The returned file is **source + extension stitched together** — trim the source span before scoring. Source 2–15s MP4; input seconds are billed too. |
+| `veo-3.1-extend` | `fal-ai/veo3.1/extend-video` | Continuation with a **fixed 7 s / 720p** output (fal schema constants); audio off. Source ≤8s, 16:9 or 9:16. fal advertises it for Veo-made clips — verify on one question before a batch. |
+| `ltx-2.3-extend` | `fal-ai/ltx-2.3/extend-video` | Continuation, LTX-2.3 Pro: `duration` is a float 2–20 s of new content and follows `ground_truth.mp4` exactly; `context` = the whole source; `mode: end`. Output reports duration/fps/frames. |
 
 For Wan, MiniMax, and Seedance reference endpoints, output duration defaults to
 the source duration rounded up to the next whole second and constrained to the
-model range. Runtime wrapper kwargs may override `resolution`, `duration`,
+model range (a 2.5 s source therefore gets 3 s from Wan, 4 s from Seedance and
+5 s from MiniMax — trim before scoring). Runtime wrapper kwargs (`run.py
+--seed / --duration / --control`) may override `resolution`, `duration`,
 `aspect_ratio`, `seed`, audio controls, and supported provider flags.
 
-Reference labels are added only when the prompt does not already include one:
-Wan and MiniMax use `Video 1`, Seedance 2.0 uses `@Video1`, Seedance 2.5 uses
-`[Video1]`, and Kling O3 uses `@Video1`. The user's edit instruction is otherwise
-left unchanged.
+**The prompt is sent verbatim.** No reference labels, no "apply this edit"
+framing, and Wan's server-side prompt expansion is off — the text in
+`prompt.txt` is exactly what the model reads. Audio generation is off on every
+profile that has the switch (silent benchmark sources; audio is billed extra).
+
+Every fal request is traceable: the request id, the full payload and the prompt
+sent are returned in the result metadata and written to the task's record by
+`run.py`. A job that exceeds `max_wait` is cancelled on fal before the error is
+raised; a job fal reports as failed (`Completed(error=...)`) raises
+`FalRequestFailed` with its id. Downloads go through a `.part` file and are
+ffprobe-validated before they count.
 
 The official endpoint pages are the source of truth for changing limits and
 pricing: [Kling O1](https://fal.ai/models/fal-ai/kling-video/o1/video-to-video/edit),

@@ -18,11 +18,13 @@ FAL_MODELS = {
     "happy-horse-1.0-video-edit": "alibaba/happy-horse/video-edit",
     "grok-imagine-video-edit": "xai/grok-imagine-video/edit-video",
     "grok-imagine-video-extend": "xai/grok-imagine-video/extend-video",
+    "veo-3.1-extend": "fal-ai/veo3.1/extend-video",
+    "ltx-2.3-extend": "fal-ai/ltx-2.3/extend-video",
 }
 
 
 def test_catalog_contains_old_and_new_models():
-    assert len(AVAILABLE_MODELS) == 33
+    assert len(AVAILABLE_MODELS) == 35
     assert "wan-2.7-video-edit" in AVAILABLE_MODELS
     assert "gemini-omni-flash-video-edit" in AVAILABLE_MODELS
     assert "kling-v2-6-v2v" in AVAILABLE_MODELS

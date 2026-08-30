@@ -2,7 +2,7 @@
 
 Unified inference toolkit for **video-to-video** generation models.
 Give it a benchmark task (a conditioning video plus a text prompt) and it runs
-any of 33 V2V models — seventeen commercial APIs and sixteen local/open-weight models —
+any of 35 V2V models — nineteen commercial APIs and sixteen local/open-weight models —
 behind one CLI.
 
 ## Commercial API models
@@ -26,6 +26,8 @@ behind one CLI.
 | happy-horse-1.0-video-edit | Happy Horse 1.0 Edit via fal.ai | FAL_KEY |
 | grok-imagine-video-edit | Grok Imagine Video Edit via fal.ai | FAL_KEY |
 | grok-imagine-video-extend | Grok Imagine Video Extend (continuation) via fal.ai | FAL_KEY |
+| veo-3.1-extend | Veo 3.1 Extend (continuation, fixed 7 s) via fal.ai | FAL_KEY |
+| ltx-2.3-extend | LTX-2.3 Pro Extend (continuation, 2–20 s) via fal.ai | FAL_KEY |
 
 No GPU, weights, or per-model venv needed. One `FAL_KEY` runs every fal-hosted
 model in the table; Runway alone uses `RUNWAYML_API_SECRET` because its Aleph
@@ -110,6 +112,19 @@ python3 run.py --model runway-aleph-v2v \
 ```
 
 Add `--dry-run` to see the planned jobs without calling any API.
+
+Benchmark controls: `--seed N` (forwarded to every endpoint that accepts one),
+`--duration S` (endpoint-checked override of the output/extension length),
+`--max-wait S` (cancel a hosted job after S seconds), `--control key=value`
+(any endpoint control from the profile, repeatable), `--workers N` (concurrent
+generations per model), `--retries N` (transient errors only), `--retry-failed`
+(rerun only tasks with a `.failed.json`).
+
+Every generation leaves a record next to its video: `<task_id>.json` on
+success (request/task id, the exact payload and prompt sent, input padding,
+output geometry) or `<task_id>.failed.json` on failure, plus one
+`run-<timestamp>.json` manifest per model. A task is only skipped on rerun when
+its video decodes and its success record exists.
 ffmpeg must be on PATH (used to front-pad too-short input videos by cloning
 their first frame — the clip's ending is never touched).
 Run run.py from the repo root — it is not installed as a console script.

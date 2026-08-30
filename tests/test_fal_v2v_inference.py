@@ -7,29 +7,81 @@ from v2vinferkit.models.fal_v2v_inference import FalV2VService, FalV2VWrapper
 
 
 @pytest.mark.parametrize(
-    "profile,expected_field,expected_video,expected_reference,expected_duration,expected_resolution",
+    "profile,expected_field,expected_video,expected_duration,expected_resolution,audio_key",
     [
-        ("wan3", "reference_video_urls", ["https://input/video.mp4"], "Video 1", 6, "720p"),
-        ("minimax_h3", "reference_video_urls", ["https://input/video.mp4"], "Video 1", 6, "768P"),
-        ("seedance_2", "video_urls", ["https://input/video.mp4"], "@Video1", "6", "720p"),
-        ("seedance_2_5", "video_urls", ["https://input/video.mp4"], "[Video1]", "6", "720p"),
+        ("wan3", "reference_video_urls", ["https://input/video.mp4"], 6, "720p", "audio"),
+        ("minimax_h3", "reference_video_urls", ["https://input/video.mp4"], 6, "768P", None),
+        ("seedance_2", "video_urls", ["https://input/video.mp4"], "6", "720p", "generate_audio"),
+        ("seedance_2_5", "video_urls", ["https://input/video.mp4"], "6", "720p", "generate_audio"),
     ],
 )
 def test_reference_payload_profiles(
     profile,
     expected_field,
     expected_video,
-    expected_reference,
     expected_duration,
     expected_resolution,
+    audio_key,
 ):
     service = FalV2VService("provider/model", profile)
     payload = service.build_payload("turn the sky green", "https://input/video.mp4", 5.625)
 
     assert payload[expected_field] == expected_video
-    assert expected_reference in payload["prompt"]
+    # The benchmark prompt goes out verbatim: no reference labels, no "apply this edit".
+    assert payload["prompt"] == "turn the sky green"
     assert payload["duration"] == expected_duration
     assert payload["resolution"] == expected_resolution
+    if audio_key:
+        assert payload[audio_key] is False
+    assert payload.get("enable_prompt_expansion") in (None, False)
+
+
+BENCHMARK_SOURCE_SECONDS = 2.5  # 60 frames @ 24 fps
+
+
+@pytest.mark.parametrize(
+    "profile,expected",
+    [
+        ("seedance_2_5", {"duration": "4", "generate_audio": False, "resolution": "720p"}),
+        ("wan3", {"duration": 3, "audio": False, "enable_prompt_expansion": False}),
+        ("minimax_h3", {"duration": 5, "resolution": "768P"}),
+        ("kling_o3_edit", {"keep_audio": False}),
+        ("veo31_extend", {"duration": "7s", "resolution": "720p", "generate_audio": False, "aspect_ratio": "16:9"}),
+    ],
+)
+def test_benchmark_payload_snapshots(profile, expected):
+    """What each in-scope endpoint receives for a 2.5 s silent source, prompt verbatim."""
+    service = FalV2VService("provider/model", profile)
+    payload = service.build_payload("P", "https://input/video.mp4", BENCHMARK_SOURCE_SECONDS, seed=7)
+
+    assert payload["prompt"] == "P"
+    for key, value in expected.items():
+        assert payload[key] == value
+    if "seed" in service.profile.get("allowed_controls", set()):
+        assert payload["seed"] == 7
+
+
+def test_ltx_extend_sends_exact_float_duration_and_context():
+    service = FalV2VService("fal-ai/ltx-2.3/extend-video", "ltx23_extend")
+    payload = service.build_payload("P", "https://input/video.mp4", 2.5, requested_duration=2.5)
+
+    assert payload["duration"] == 2.5
+    assert payload["mode"] == "end"
+    assert payload["context"] == 2.5
+    with pytest.raises(ValueError, match="between 2 and 20"):
+        service.build_payload("P", "https://input/video.mp4", 2.5, requested_duration=1.0)
+
+
+def test_veo_extend_refuses_requested_duration():
+    service = FalV2VService("fal-ai/veo3.1/extend-video", "veo31_extend")
+    with pytest.raises(ValueError, match="fixed output duration"):
+        service.build_payload("P", "https://input/video.mp4", 2.5, requested_duration=3)
+
+
+def test_grok_extend_rejects_out_of_range_extension():
+    service = FalV2VService("xai/grok-imagine-video/extend-video", "grok_extend")
+    with pytest.raises(ValueError, match="one of 2, 3"):
+        service.build_payload("P", "https://input/video.mp4", 2.5, requested_duration=12)
 
 
 @pytest.mark.parametrize(
@@ -46,7 +98,7 @@ def test_reference_payload_profiles(
         ),
         ("gemini_omni", {"video_url": "https://input/video.mp4"}),
         ("gemini_omni_edit", {"video_url": "https://input/video.mp4", "resolution": "720p"}),
-        ("kling_o3_edit", {"video_url": "https://input/video.mp4", "keep_audio": True}),
+        ("kling_o3_edit", {"video_url": "https://input/video.mp4", "keep_audio": False}),
         (
             "happy_horse_edit",
             {"video_url": "https://input/video.mp4", "resolution": "720p", "audio_setting": "origin"},
@@ -182,6 +234,46 @@ def test_extend_wrapper_derives_duration_from_num_frames(monkeypatch, tmp_path):
     assert captured["duration"] == 3
 
 
+def test_extend_wrapper_refuses_to_guess_extension_length(monkeypatch, tmp_path):
+    """No ground truth -> no request. Falling back to the provider default (6 s) would double the bill."""
+    video = tmp_path / "input.mp4"
+    video.touch()
+    wrapper = FalV2VWrapper(
+        model="grok-imagine-video-extend",
+        endpoint="xai/grok-imagine-video/extend-video",
+        profile="grok_extend",
+        output_dir=str(tmp_path),
+    )
+    called = {"n": 0}
+    monkeypatch.setattr(wrapper.service, "generate_video", lambda **kw: called.__setitem__("n", 1))
+
+    result = wrapper.generate(text_prompt="continue", video_path=video)
+
+    assert result["success"] is False
+    assert "extension length unknown" in result["error"]
+    assert called["n"] == 0
+
+
+def test_ltx_wrapper_derives_float_extension(monkeypatch, tmp_path):
+    video = tmp_path / "input.mp4"
+    video.touch()
+    monkeypatch.setattr(module, "_probe_video_fps", lambda _: 24.0)
+    captured = {}
+
+    def fake_generate_video(prompt, video_path, output_path, duration=None, max_wait=None, **kwargs):
+        captured["duration"] = duration
+        return {"video_path": str(output_path), "video_url": "u", "request_id": "r",
+                "endpoint": "e", "payload": {"duration": duration}, "input_duration": 2.5, "response": {}}
+
+    wrapper = FalV2VWrapper(model="ltx-2.3-extend", endpoint="fal-ai/ltx-2.3/extend-video",
+                            profile="ltx23_extend", output_dir=str(tmp_path))
+    monkeypatch.setattr(wrapper.service, "generate_video", fake_generate_video)
+    result = wrapper.generate(text_prompt="continue", video_path=video, num_frames=60)
+
+    assert result["success"] is True
+    assert captured["duration"] == 2.5
+
+
 def test_extend_input_guard_matches_endpoint_limits(monkeypatch, tmp_path):
     video = tmp_path / "input.mp4"
     video.touch()
@@ -275,12 +367,14 @@ def test_queue_submit_polls_to_completion(monkeypatch):
     assert result["video"]["url"] == "https://output/video.mp4"
 
 
-def test_queue_timeout_retains_remote_request_id(monkeypatch):
+def test_queue_timeout_cancels_and_retains_remote_request_id(monkeypatch):
     class InProgress:
         pass
 
     class Handler:
         request_id = "req-timeout"
+
+    cancelled = []
 
     class FakeFal:
         def submit(self, endpoint, arguments):
@@ -289,12 +383,107 @@ def test_queue_timeout_retains_remote_request_id(monkeypatch):
         def status(self, endpoint, request_id, with_logs):
             return InProgress()
 
+        def cancel(self, endpoint, request_id):
+            cancelled.append(request_id)
+
     service = FalV2VService("provider/model", "gemini_omni_edit", poll_interval=0)
     monkeypatch.setattr(service, "_fal_client", lambda: FakeFal())
 
     with pytest.raises(module.FalRequestTimeout) as error:
         service.submit({"prompt": "test"}, max_wait=0)
     assert error.value.request_id == "req-timeout"
+    assert error.value.cancelled is True
+    assert cancelled == ["req-timeout"]
+
+
+def test_completed_with_error_is_a_traceable_failure(monkeypatch):
+    """fal_client has no Failed status: a failed job is Completed(error=...)."""
+
+    class Completed:
+        error = "content policy violation"
+        error_type = "moderation"
+
+    class Handler:
+        request_id = "req-moderated"
+
+    class FakeFal:
+        def submit(self, endpoint, arguments):
+            return Handler()
+
+        def status(self, endpoint, request_id, with_logs):
+            return Completed()
+
+        def result(self, endpoint, request_id):
+            raise AssertionError("result() must not be called on an errored job")
+
+    service = FalV2VService("provider/model", "gemini_omni_edit", poll_interval=0)
+    monkeypatch.setattr(service, "_fal_client", lambda: FakeFal())
+
+    with pytest.raises(module.FalRequestFailed) as error:
+        service.submit({"prompt": "test"})
+    assert error.value.request_id == "req-moderated"
+    assert "moderation" in str(error.value)
+
+
+def test_result_http_error_keeps_request_id(monkeypatch):
+    class Completed:
+        pass
+
+    class Handler:
+        request_id = "req-http"
+
+    class FakeFal:
+        def submit(self, endpoint, arguments):
+            return Handler()
+
+        def status(self, endpoint, request_id, with_logs):
+            return Completed()
+
+        def result(self, endpoint, request_id):
+            raise RuntimeError("422 Unprocessable")
+
+    service = FalV2VService("provider/model", "gemini_omni_edit", poll_interval=0)
+    monkeypatch.setattr(service, "_fal_client", lambda: FakeFal())
+
+    with pytest.raises(module.FalRequestFailed) as error:
+        service.submit({"prompt": "test"})
+    assert error.value.request_id == "req-http"
+    assert "422" in str(error.value)
+
+
+def test_download_never_leaves_an_empty_file(monkeypatch, tmp_path):
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def iter_bytes(self):
+            return iter([])
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class Client:
+        def __init__(self, **kw):
+            pass
+
+        def stream(self, method, url):
+            return Response()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(module.httpx, "Client", Client)
+    target = tmp_path / "out.mp4"
+    with pytest.raises(RuntimeError, match="0 bytes"):
+        FalV2VService.download("https://x/video.mp4", target)
+    assert not target.exists()
+    assert not target.with_name("out.mp4.part").exists()
 
 
 def test_wrapper_returns_standard_result(monkeypatch, tmp_path):

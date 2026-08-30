@@ -68,7 +68,6 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
     "wan3": {
         "video_field": "reference_video_urls",
         "video_is_list": True,
-        "reference_label": "Video 1",
         "input_max": 15.0,
         "output_min": 2,
         "output_max": 30,
@@ -80,14 +79,15 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
         "defaults": {
             "resolution": "720p",
             "aspect_ratio": "adaptive",
-            "audio": True,
-            "enable_prompt_expansion": True,
+            # Benchmark defaults: no audio (silent sources, billed extra) and no
+            # server-side prompt rewriting (the prompt must reach the model as written).
+            "audio": False,
+            "enable_prompt_expansion": False,
         },
     },
     "minimax_h3": {
         "video_field": "reference_video_urls",
         "video_is_list": True,
-        "reference_label": "Video 1",
         "input_min": 2.0,
         "input_max": 15.0,
         "output_min": 5,
@@ -99,7 +99,6 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
     "seedance_2": {
         "video_field": "video_urls",
         "video_is_list": True,
-        "reference_label": "@Video1",
         "input_min": 2.0,
         "input_max": 15.0,
         "output_min": 4,
@@ -111,13 +110,12 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
         "defaults": {
             "resolution": "720p",
             "aspect_ratio": "auto",
-            "generate_audio": True,
+            "generate_audio": False,
         },
     },
     "seedance_2_5": {
         "video_field": "video_urls",
         "video_is_list": True,
-        "reference_label": "[Video1]",
         "input_max": 30.0,
         "output_min": 4,
         "output_max": 30,
@@ -128,7 +126,7 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
         "defaults": {
             "resolution": "720p",
             "aspect_ratio": "auto",
-            "generate_audio": True,
+            "generate_audio": False,
         },
     },
     "gemini_omni_edit": {
@@ -138,11 +136,10 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
     },
     "kling_o3_edit": {
         "video_field": "video_url",
-        "reference_label": "@Video1",
         "input_min": 3.0,
         "input_max": 15.0,
         "allowed_controls": {"keep_audio", "shot_type"},
-        "defaults": {"keep_audio": True, "shot_type": "customize"},
+        "defaults": {"keep_audio": False, "shot_type": "customize"},
     },
     "happy_horse_edit": {
         "video_field": "video_url",
@@ -162,21 +159,56 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
     },
     "grok_extend": {
         # True continuation: generates new frames after the source's last frame.
-        # `duration` is the extension length in seconds (fal default 6); the
-        # output keeps the source resolution and is source + extension long.
+        # `duration` = extension length, integer seconds 2-10; the returned file is
+        # the ORIGINAL + EXTENSION stitched together (fal schema says so), so the
+        # source span must be trimmed before scoring.
         "video_field": "video_url",
         "extension": True,
         "input_min": 2.0,
         "input_max": 15.0,
         "duration_type": "integer",
+        "duration_values": set(range(2, 11)),
         "allowed_controls": {"duration"},
         "defaults": {"duration": 6},
+    },
+    "veo31_extend": {
+        # Veo 3.1 extend: `duration` is a const "7s" and resolution a const "720p"
+        # in fal's schema, so the ground-truth length cannot be honoured — the
+        # output has to be trimmed afterwards. Audio is on by default upstream
+        # and doubles the price; off here.
+        "video_field": "video_url",
+        "extension": True,
+        "fixed_duration": True,
+        "input_max": 8.0,
+        "allowed_controls": {"seed", "negative_prompt", "generate_audio", "aspect_ratio", "resolution"},
+        "defaults": {
+            "duration": "7s",
+            "resolution": "720p",
+            "aspect_ratio": "16:9",
+            "generate_audio": False,
+        },
+    },
+    "ltx23_extend": {
+        # LTX-2.3 Pro extend: `duration` is a float 2-20 (seconds of NEW content),
+        # `mode` end/start, `context` = seconds of source used as context. The only
+        # hosted extend endpoint that can match a 2.5 s ground truth exactly.
+        "video_field": "video_url",
+        "extension": True,
+        "duration_type": "float",
+        "duration_float_min": 2.0,
+        "duration_float_max": 20.0,
+        "context_from_source": True,
+        "allowed_controls": {"duration", "mode", "context"},
+        "defaults": {"mode": "end"},
     },
 }
 
 _CONTROL_KEYS = {
     "resolution",
     "duration",
+    "negative_prompt",
+    "mode",
+    "context",
     "aspect_ratio",
     "seed",
     "audio",
@@ -195,14 +227,65 @@ _CONTROL_KEYS = {
 
 
 class FalRequestTimeout(TimeoutError):
-    """A local wait expired while the paid remote fal request may continue."""
+    """A local wait expired; the remote request was asked to cancel."""
 
-    def __init__(self, request_id: str, timeout: int) -> None:
+    def __init__(self, request_id: str, timeout: int, cancelled: bool = False) -> None:
         self.request_id = request_id
+        self.cancelled = cancelled
         super().__init__(
             f"fal request {request_id} did not finish within {timeout}s; "
-            "the remote request may still be running"
+            + ("cancel requested" if cancelled else "cancel FAILED - the remote request may still be running and billing")
         )
+
+
+class FalRequestFailed(RuntimeError):
+    """A submitted (billed) fal request ended without a usable result.
+
+    Carries the request id so the failure can be traced in the fal dashboard
+    even when the SDK exception itself has no id (FalClientHTTPError does not).
+    """
+
+    def __init__(self, request_id: Optional[str], message: str) -> None:
+        self.request_id = request_id
+        super().__init__(f"fal request {request_id or '<not submitted>'} failed: {message}")
+
+
+def _probe_video_geometry(video_path: Union[str, Path]) -> Dict[str, Any]:
+    """Return width/height/fps/frames/duration of the first video stream (ffprobe)."""
+    if shutil.which("ffprobe") is None:
+        raise RuntimeError("ffprobe is required to validate generated videos")
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames",
+            "-show_entries", "stream=width,height,avg_frame_rate,nb_read_frames:format=duration",
+            "-of", "json", str(video_path),
+        ],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe failed: {result.stderr.strip() or 'unknown error'}")
+    import json as _json
+    data = _json.loads(result.stdout or "{}")
+    streams = data.get("streams") or []
+    if not streams:
+        raise ValueError("no video stream")
+    st = streams[0]
+    num, _, den = str(st.get("avg_frame_rate", "0/1")).partition("/")
+    try:
+        fps = float(num) / float(den or 1)
+    except (ValueError, ZeroDivisionError):
+        fps = 0.0
+    frames = int(st.get("nb_read_frames") or 0)
+    duration = float((data.get("format") or {}).get("duration") or 0.0)
+    if frames <= 0 or duration <= 0:
+        raise ValueError(f"video has no decodable frames (frames={frames}, duration={duration})")
+    return {
+        "width": int(st.get("width", 0)),
+        "height": int(st.get("height", 0)),
+        "fps": round(fps, 3),
+        "frames": frames,
+        "duration": round(duration, 3),
+    }
 
 
 def _probe_video_duration(video_path: Union[str, Path]) -> float:
@@ -268,16 +351,20 @@ def _probe_video_fps(video_path: Union[str, Path]) -> float:
     return fps
 
 
-def extension_seconds(video_path: Union[str, Path], num_frames: int) -> int:
-    """Whole seconds an extension endpoint must generate to cover `num_frames`.
+def extension_seconds(video_path: Union[str, Path], num_frames: int, integer: bool = True) -> float:
+    """Seconds an extension endpoint must generate to cover `num_frames`.
 
     Benchmark tasks ship a ground-truth continuation; its frame count at the
-    source's frame rate is the length the model has to produce. Rounded up so
-    the answer is never shorter than the reference.
+    source's frame rate is the length the model has to produce. Integer
+    endpoints get the value rounded UP so the answer is never shorter than the
+    reference; float endpoints get the exact value.
     """
     if num_frames <= 0:
         raise ValueError("num_frames must be positive to derive an extension length")
-    return max(1, int(math.ceil(num_frames / _probe_video_fps(video_path))))
+    exact = num_frames / _probe_video_fps(video_path)
+    if integer:
+        return max(1, int(math.ceil(exact)))
+    return round(exact, 3)
 
 
 def _has_audio_stream(video_path: Union[str, Path]) -> bool:
@@ -356,6 +443,8 @@ class FalV2VService:
         self.profile = _PROFILES[profile]
         self.max_wait = max_wait
         self.poll_interval = poll_interval
+        self.last_request_id: Optional[str] = None
+        self.last_payload: Optional[Dict[str, Any]] = None
 
     @staticmethod
     def _fal_client():
@@ -397,12 +486,10 @@ class FalV2VService:
     ) -> Dict[str, Any]:
         """Translate common runner inputs to the selected endpoint schema."""
         profile = self.profile
-        reference_label = profile.get("reference_label")
-        rendered_prompt = prompt
-        if reference_label and reference_label.lower() not in prompt.lower():
-            rendered_prompt = f"Apply this edit to {reference_label}: {prompt}"
-
-        payload: Dict[str, Any] = {"prompt": rendered_prompt}
+        # The prompt is sent verbatim. No provider-specific reference labels or
+        # "apply this edit" framing: a benchmark prompt describes an event, and
+        # rewriting it changes what is being measured.
+        payload: Dict[str, Any] = {"prompt": prompt}
         video_value: Any = [video_url] if profile.get("video_is_list") else video_url
         payload[profile["video_field"]] = video_value
         payload.update(profile.get("defaults", {}))
@@ -441,6 +528,23 @@ class FalV2VService:
         elif requested_duration is not None and profile.get("duration_type") == "integer":
             # Free integer seconds (extension endpoints publish no range).
             payload["duration"] = int(math.ceil(requested_duration))
+        elif requested_duration is not None and profile.get("duration_type") == "float":
+            lo = float(profile.get("duration_float_min", 0))
+            hi = float(profile.get("duration_float_max", float("inf")))
+            if requested_duration < lo or requested_duration > hi:
+                raise ValueError(
+                    f"Requested duration must be between {lo:g} and {hi:g} seconds for {self.endpoint}"
+                )
+            payload["duration"] = round(float(requested_duration), 3)
+        elif requested_duration is not None and profile.get("fixed_duration"):
+            raise ValueError(
+                f"{self.endpoint} has a fixed output duration ({profile['defaults'].get('duration')}); "
+                "a requested duration cannot be honoured"
+            )
+
+        if profile.get("context_from_source"):
+            # Give the extend endpoint the whole source as context (capped by its schema).
+            payload["context"] = round(min(float(source_duration), 20.0), 3)
 
         allowed_controls = profile.get("allowed_controls", set())
         for key, value in kwargs.items():
@@ -449,34 +553,65 @@ class FalV2VService:
         return payload
 
     def submit(self, payload: Dict[str, Any], max_wait: Optional[int] = None) -> Tuple[Dict[str, Any], str]:
+        """Submit one paid request and poll it to completion.
+
+        Every exception raised after submission carries the request id
+        (FalRequestFailed / FalRequestTimeout) — the id is the only handle on
+        a billed job, and fal's own HTTP errors do not include it.
+        """
         fal_client = self._fal_client()
         handler = fal_client.submit(self.endpoint, arguments=payload)
         request_id = handler.request_id
+        self.last_request_id = request_id
         timeout = self.max_wait if max_wait is None else max_wait
         started = time.monotonic()
 
-        while time.monotonic() - started < timeout:
+        while True:
             status = fal_client.status(self.endpoint, request_id, with_logs=True)
             status_name = status.__class__.__name__.lower()
             if "completed" in status_name:
-                return fal_client.result(self.endpoint, request_id), request_id
+                # fal_client has no Failed status class: a failed job arrives as
+                # Completed(error=..., error_type=...).
+                error = getattr(status, "error", None)
+                if error:
+                    raise FalRequestFailed(request_id, f"{getattr(status, 'error_type', '') or ''} {error}".strip())
+                try:
+                    return fal_client.result(self.endpoint, request_id), request_id
+                except Exception as exc:  # FalClientHTTPError carries no request id
+                    raise FalRequestFailed(request_id, f"{exc.__class__.__name__}: {exc}") from exc
             if "failed" in status_name or "cancel" in status_name:
                 detail = getattr(status, "error", None) or getattr(status, "detail", None) or status
-                raise RuntimeError(f"fal request {request_id} failed: {detail}")
+                raise FalRequestFailed(request_id, str(detail))
+            if time.monotonic() - started >= timeout:
+                cancelled = False
+                try:
+                    fal_client.cancel(self.endpoint, request_id)
+                    cancelled = True
+                except Exception as exc:
+                    logger.error("fal cancel failed for %s: %s", request_id, exc)
+                raise FalRequestTimeout(request_id, timeout, cancelled=cancelled)
             if self.poll_interval:
                 time.sleep(self.poll_interval)
 
-        raise FalRequestTimeout(request_id, timeout)
-
     @staticmethod
     def download(video_url: str, output_path: Path) -> Path:
+        """Stream to `<name>.part`, verify, then rename — a broken download never
+        leaves a file at the final path (which skip-existing would trust)."""
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with httpx.Client(timeout=600.0, follow_redirects=True) as client:
-            with client.stream("GET", video_url) as response:
-                response.raise_for_status()
-                with output_path.open("wb") as output:
-                    for chunk in response.iter_bytes():
-                        output.write(chunk)
+        part_path = output_path.with_name(output_path.name + ".part")
+        try:
+            with httpx.Client(timeout=600.0, follow_redirects=True) as client:
+                with client.stream("GET", video_url) as response:
+                    response.raise_for_status()
+                    with part_path.open("wb") as output:
+                        for chunk in response.iter_bytes():
+                            output.write(chunk)
+            if part_path.stat().st_size == 0:
+                raise RuntimeError("downloaded video is empty (0 bytes)")
+            part_path.replace(output_path)
+        except Exception:
+            part_path.unlink(missing_ok=True)
+            raise
         return output_path
 
     def generate_video(
@@ -489,6 +624,8 @@ class FalV2VService:
         **kwargs: Any,
     ) -> Dict[str, Any]:
         fal_client = self._fal_client()
+        self.last_request_id = None
+        source_duration = _probe_video_duration(video_path)
         prepared_path, input_duration, is_temp = self.prepare_input(video_path)
         try:
             video_url = fal_client.upload_file(str(prepared_path))
@@ -501,19 +638,30 @@ class FalV2VService:
                 requested_duration=duration,
                 **kwargs,
             )
+            self.last_payload = payload
             response, request_id = self.submit(payload, max_wait=max_wait)
             result_video = response.get("video") or {}
             result_url = result_video.get("url")
             if not result_url:
-                raise RuntimeError(f"fal request {request_id} completed without a video URL")
+                raise FalRequestFailed(request_id, "completed without a video URL")
             self.download(result_url, output_path)
+            try:
+                output_geometry = _probe_video_geometry(output_path)
+            except Exception as exc:
+                output_path.unlink(missing_ok=True)
+                raise FalRequestFailed(request_id, f"downloaded video failed validation: {exc}") from exc
             return {
                 "video_path": str(output_path),
                 "video_url": result_url,
                 "request_id": request_id,
                 "endpoint": self.endpoint,
+                "profile": self.profile_name,
                 "payload": payload,
+                "prompt_sent": payload.get("prompt"),
+                "source_duration": source_duration,
                 "input_duration": input_duration,
+                "input_padded_seconds": round(input_duration - source_duration, 3) if is_temp else 0.0,
+                "output_geometry": output_geometry,
                 "response": response,
             }
         finally:
@@ -551,10 +699,19 @@ class FalV2VWrapper(ModelWrapper):
         try:
             if not video_path:
                 raise ValueError("video_path is required for fal V2V inference")
-            if duration is None and num_frames and self.service.profile.get("extension"):
-                # Continuation endpoints: generate exactly as long as the
-                # ground truth instead of the provider's default extension.
-                duration = extension_seconds(video_path, int(num_frames))
+            profile = self.service.profile
+            if profile.get("extension") and not profile.get("fixed_duration") and duration is None:
+                # Continuation endpoints: generate exactly as long as the ground
+                # truth. Never fall back to the provider default — that silently
+                # changes what is billed (grok defaults to 6 s, twice the need).
+                if not num_frames:
+                    raise ValueError(
+                        f"{self.model}: extension length unknown — the task has no readable "
+                        "ground_truth.mp4 and no --duration was given"
+                    )
+                duration = extension_seconds(
+                    video_path, int(num_frames), integer=profile.get("duration_type") != "float"
+                )
             allowed_kwargs = {key: value for key, value in kwargs.items() if key in _CONTROL_KEYS}
             max_wait = kwargs.get("max_wait")
             result = self.service.generate_video(
@@ -577,18 +734,26 @@ class FalV2VWrapper(ModelWrapper):
                 "metadata": {
                     "provider": "fal",
                     "endpoint": result["endpoint"],
+                    "profile": result.get("profile", self.service.profile_name),
+                    "request_id": result["request_id"],
                     "video_url": result["video_url"],
-                    "input_duration": result["input_duration"],
-                    "requested_duration": result["payload"].get("duration"),
-                    "resolution": result["payload"].get("resolution"),
-                    "seed": response.get("seed"),
+                    "payload": dict(result.get("payload") or {}),
+                    "prompt_sent": result.get("prompt_sent", (result.get("payload") or {}).get("prompt")),
+                    "prompt_original": text_prompt,
+                    "source_duration": result.get("source_duration"),
+                    "input_duration": result.get("input_duration"),
+                    "input_padded_seconds": result.get("input_padded_seconds", 0.0),
+                    "requested_duration": (result.get("payload") or {}).get("duration"),
+                    "resolution": (result.get("payload") or {}).get("resolution"),
+                    "seed": response.get("seed", (result.get("payload") or {}).get("seed")),
+                    "output_geometry": result.get("output_geometry"),
                     "interaction_id": response.get("interaction_id"),
                     "actual_prompt": response.get("actual_prompt"),
                 },
             }
         except Exception as exc:
             logger.error("fal V2V generation failed for %s: %s", self.model, exc)
-            request_id = getattr(exc, "request_id", None)
+            request_id = getattr(exc, "request_id", None) or getattr(self.service, "last_request_id", None)
             return {
                 "success": False,
                 "video_path": None,
@@ -600,8 +765,11 @@ class FalV2VWrapper(ModelWrapper):
                 "metadata": {
                     "provider": "fal",
                     "endpoint": self.service.endpoint,
+                    "profile": self.service.profile_name,
                     "request_id": request_id,
-                    "prompt": text_prompt,
+                    "cancelled": getattr(exc, "cancelled", None),
+                    "payload": getattr(self.service, "last_payload", None),
+                    "prompt_original": text_prompt,
                     "image_path": str(image_path) if image_path else None,
                 },
             }

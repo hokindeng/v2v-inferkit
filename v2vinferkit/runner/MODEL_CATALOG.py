@@ -51,6 +51,8 @@ KLING_MODELS = {
         "args": {
             "endpoint": "fal-ai/kling-video/o3/pro/video-to-video/edit",
             "profile": "kling_o3_edit",
+            # pilot 2026-08-29: 635 s for a 2.5 s source; default 1800 is too tight for tails
+            "max_wait": 3600,
         },
     },
 }
@@ -262,6 +264,42 @@ GROK_MODELS = {
         "args": {
             "endpoint": "xai/grok-imagine-video/extend-video",
             "profile": "grok_extend",
+        },
+    },
+}
+
+# Google Veo 3.1 continuation via fal.ai (FAL_KEY; routed to Vertex by fal)
+VEO_MODELS = {
+    "veo-3.1-extend": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "veo-3.1",
+        "modality": "v2v",
+        "capability": "video_continuation",
+        "description": "Veo 3.1 video extension via fal.ai (fixed 7 s / 720p continuation, audio off)",
+        "family": "Veo",
+        "args": {
+            "endpoint": "fal-ai/veo3.1/extend-video",
+            "profile": "veo31_extend",
+        },
+    },
+}
+
+# Lightricks LTX-2.3 Pro continuation via fal.ai (FAL_KEY)
+LTX_HOSTED_MODELS = {
+    "ltx-2.3-extend": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "ltx-2.3-pro",
+        "modality": "v2v",
+        "capability": "video_continuation",
+        "description": "LTX-2.3 Pro video extension via fal.ai (float duration 2-20 s, follows ground truth)",
+        "family": "LTX",
+        "args": {
+            "endpoint": "fal-ai/ltx-2.3/extend-video",
+            "profile": "ltx23_extend",
         },
     },
 }
@@ -560,6 +598,8 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
     **SEEDANCE_MODELS,
     **HAPPY_HORSE_MODELS,
     **GROK_MODELS,
+    **VEO_MODELS,
+    **LTX_HOSTED_MODELS,
     **WAN_VACE_MODELS,
     **OMNIWEAVING_MODELS,
     **JOYAI_MODELS,
@@ -586,6 +626,8 @@ MODEL_FAMILIES: Dict[str, Dict[str, Dict[str, Any]]] = {
     "Seedance": SEEDANCE_MODELS,
     "Happy Horse": HAPPY_HORSE_MODELS,
     "Grok Imagine": GROK_MODELS,
+    "Veo": VEO_MODELS,
+    "LTX (hosted)": LTX_HOSTED_MODELS,
     "Wan-VACE": WAN_VACE_MODELS,
     "Hunyuan OmniWeaving": OMNIWEAVING_MODELS,
     "JoyAI Video Edit": JOYAI_MODELS,
