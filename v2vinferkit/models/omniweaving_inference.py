@@ -109,6 +109,10 @@ class OmniWeavingService:
         **kwargs,
     ) -> Dict[str, Any]:
         start_time = time.time()
+        # generate.py runs with cwd=repo, so a relative --output_dir (e.g. ../outputs from
+        # the kit root) would land inside the repo clone and the existence check below
+        # would miss it (hit 2026-09-20) — always hand it an absolute path.
+        output_path = Path(output_path).resolve()
 
         if not (self.repo_path / "generate.py").exists():
             raise FileNotFoundError(
