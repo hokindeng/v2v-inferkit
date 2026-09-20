@@ -168,8 +168,12 @@ class OmniWeavingService:
                 capture_output=True, text=True, timeout=7200,
             )
             if proc.returncode != 0:
+                # keep the whole stderr next to the output: the 800-char tail below is
+                # usually just torchrun's ChildFailedError banner without the root cause
+                err_log = output_path.with_suffix(".stderr.log")
+                err_log.write_text(proc.stdout[-20000:] + "\n--- stderr ---\n" + proc.stderr)
                 raise RuntimeError(
-                    f"generate.py failed (exit {proc.returncode}): {proc.stderr[-800:]}"
+                    f"generate.py failed (exit {proc.returncode}, full log {err_log}): {proc.stderr[-800:]}"
                 )
             if not output_path.exists():
                 raise RuntimeError(
