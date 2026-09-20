@@ -10,7 +10,7 @@ LTX2_EXTEND_MAX_FRAMES, default 257). The first 9 output frames are the reproduc
 prefix and are dropped, so the saved mp4 is the extension only (nothing to trim before
 scoring). Output resolution follows the input's aspect ratio with the long side at
 LTX2_EXTEND_STAGE1_LONG_SIDE (default 768; the two-stage pipeline renders at half and
-upsamples x2 to this size), rounded to multiples of 32. Audio is stripped from the output.
+upsamples x2 to this size), rounded to multiples of 64. Audio is stripped from the output.
 
 Weights and repo are the ones ltx-2.3-dev-v2v installs (setup/models/ltx-2.3-dev-v2v);
 the venv is shared (catalog venv_id = ltx-2.3-dev-v2v).
@@ -49,7 +49,8 @@ def _probe(path: Union[str, Path]) -> Dict[str, float]:
 
 def _stage1_dims(w: int, h: int, long_side: int) -> tuple:
     scale = long_side / max(w, h)
-    sw, sh = max(256, int(round(w * scale / 32)) * 32), max(256, int(round(h * scale / 32)) * 32)
+    # two-stage pipelines assert multiples of 64 (assert_resolution, is_two_stage=True)
+    sw, sh = max(256, int(round(w * scale / 64)) * 64), max(256, int(round(h * scale / 64)) * 64)
     return sw, sh
 
 
