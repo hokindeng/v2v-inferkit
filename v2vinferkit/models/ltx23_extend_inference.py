@@ -8,9 +8,9 @@ compression), and the pipeline generates 9 + N frames at 24 fps where N covers t
 target clip's duration (ground_truth.mp4; rounded up to 8k+1, capped by
 LTX2_EXTEND_MAX_FRAMES, default 257). The first 9 output frames are the reproduced
 prefix and are dropped, so the saved mp4 is the extension only (nothing to trim before
-scoring). Stage-1 resolution follows the input's aspect ratio with the long side at
-LTX2_EXTEND_STAGE1_LONG_SIDE (default 768, i.e. 1536 after the x2 upsampler), rounded to
-multiples of 32. Audio is stripped from the output.
+scoring). Output resolution follows the input's aspect ratio with the long side at
+LTX2_EXTEND_STAGE1_LONG_SIDE (default 768; the two-stage pipeline renders at half and
+upsamples x2 to this size), rounded to multiples of 32. Audio is stripped from the output.
 
 Weights and repo are the ones ltx-2.3-dev-v2v installs (setup/models/ltx-2.3-dev-v2v);
 the venv is shared (catalog venv_id = ltx-2.3-dev-v2v).
@@ -73,7 +73,7 @@ class Ltx23ExtendService:
                 raise FileNotFoundError(f"{req} not found ({hint}) — run setup/install_model.sh --model ltx-2.3-dev-v2v")
         info = _probe(video_path)
         sw, sh = _stage1_dims(info["width"], info["height"], self.long_side)
-        ow, oh = sw * 2, sh * 2
+        ow, oh = sw, sh  # --height/--width are the final output dims of the two-stage pipeline
         tgt_s = target_seconds if target_seconds else info["duration"]
         ext_frames = int(math.ceil(tgt_s * FPS))
         total = PREFIX_FRAMES + ext_frames
@@ -126,7 +126,7 @@ class Ltx23ExtendService:
             "video_path": str(output_path), "duration_seconds": time.time() - t0, "status": "success",
             "metadata": {
                 "checkpoint_variant": self.checkpoint, "pipeline": "ltx_pipelines.distilled + 9 tail-frame keyframes (local extend)",
-                "prefix_frames_dropped": PREFIX_FRAMES, "generated_frames": total, "stage1": f"{sw}x{sh}", "output": f"{ow}x{oh}",
+                "prefix_frames_dropped": PREFIX_FRAMES, "generated_frames": total, "requested": f"{ow}x{oh}",
                 "target_seconds": round(tgt_s, 3), "capped": total < PREFIX_FRAMES + ext_frames,
                 "output_geometry": f"{out['width']}x{out['height']}@{out['fps']:.3f}fps/{out['frames']}f",
                 "seed": seed, "audio_stripped": True,
