@@ -585,6 +585,58 @@ COSMOS3_MODELS = {
         "resolution": "model-defined",
         "license": {"code": "Apache-2.0", "weights": "OpenMDW 1.1", "commercial_use": None, "url": "https://huggingface.co/nvidia/Cosmos3-Super"},
     },
+    # Same wrapper and cosmos-framework venv; the vanilla Nano checkpoint staged at
+    # $V2V_WEIGHTS_DIR/Cosmos3-Nano (setup: install cosmos3-super-v2v, then
+    # `hf download nvidia/Cosmos3-Nano --local-dir weights/Cosmos3-Nano`).
+    "cosmos3-nano-v2v": {
+        "wrapper_module": "v2vinferkit.models.cosmos3_inference",
+        "wrapper_class": "Cosmos3Wrapper",
+        "service_class": "Cosmos3Service",
+        "model": "Cosmos3-Nano",
+        "modality": "v2v",
+        "deployment": "local",
+        "venv_id": "cosmos3-super-v2v",
+        "capability": "controlled_video_transfer",
+        "description": "Cosmos3-Nano video transfer - vanilla open checkpoint through the Cosmos3-Super install",
+        "family": "NVIDIA Cosmos",
+        "gpu": "COSMOS_NUM_GPUS x 80GB (default 4)",
+        "resolution": "model-defined",
+        "license": {"code": "Apache-2.0", "weights": "OpenMDW 1.1", "commercial_use": None, "url": "https://huggingface.co/nvidia/Cosmos3-Nano"},
+    },
+}
+
+# Local (no hosted API) counterparts of two fal-hosted entries above, added 2026-09-20
+# for the Omni-Reason bench evaluation.
+LOCAL_EXTRA_MODELS = {
+    "ltx-2.3-extend-local": {
+        "wrapper_module": "v2vinferkit.models.ltx23_extend_inference",
+        "wrapper_class": "Ltx23ExtendWrapper",
+        "service_class": "Ltx23ExtendService",
+        "model": "Lightricks/LTX-2.3:extend-local",
+        "modality": "v2v",
+        "deployment": "local",
+        "venv_id": "ltx-2.3-dev-v2v",
+        "capability": "video_continuation",
+        "description": "LTX-2.3 video extension with the local distilled checkpoint (9 tail-frame keyframes; output = extension only)",
+        "family": "LTX",
+        "gpu": "1x80GB bf16",
+        "resolution": "input aspect, long side 1536",
+        "license": {"code": "Apache-2.0", "weights": "LTX-2 Community License Agreement", "commercial_use": None, "url": "https://huggingface.co/Lightricks/LTX-2.3"},
+    },
+    "minimax-h3-local": {
+        "wrapper_module": "v2vinferkit.models.minimax_h3_local_inference",
+        "wrapper_class": "MiniMaxH3LocalWrapper",
+        "service_class": "MiniMaxH3LocalWrapper",
+        "model": "MiniMaxAI/MiniMax-H3:ref2va",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "reference_to_video",
+        "description": "MiniMax H3 Ref2VA open weights served by SGLang (MINIMAX_H3_URL); HTTP client, no venv",
+        "family": "MiniMax",
+        "gpu": "4x80GB behind sglang serve --model-variant ref2va",
+        "resolution": "768p short edge",
+        "license": {"code": "MiniMax H3 Community License", "weights": "MiniMax H3 Community License (application-gated in some regions)", "commercial_use": None, "url": "https://huggingface.co/MiniMaxAI/MiniMax-H3"},
+    },
 }
 
 AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
@@ -613,6 +665,7 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
     **MAGI_MODELS,
     **LTX23_MODELS,
     **COSMOS3_MODELS,
+    **LOCAL_EXTRA_MODELS,
 }
 
 MODEL_FAMILIES: Dict[str, Dict[str, Dict[str, Any]]] = {
