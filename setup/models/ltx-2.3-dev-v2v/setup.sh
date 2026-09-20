@@ -22,8 +22,10 @@ print_section "Dependencies"
 # Pin the full torch triplet on ONE CUDA index — torchvision/torchaudio left
 # unpinned resolve from the default index and can land CUDA-13 builds beside
 # cu126 torch (libcudart.so.13 crash, hit live 2026-07-17).
-pip install -q "torch~=2.7.0" "torchvision~=0.22.0" "torchaudio~=2.7.0" \
-    --index-url https://download.pytorch.org/whl/cu126
+# ltx-core (2026-08) calls torch.compiler.nested_compile_region, which torch 2.7 lacks
+# (AttributeError at import, hit 2026-08-16 and again 2026-09-20) — pin the 2.11 cu128 triplet.
+pip install -q "torch~=2.11.0" "torchvision~=0.26.0" "torchaudio~=2.11.0" \
+    --index-url https://download.pytorch.org/whl/cu128
 # install the pipelines package editable from the monorepo (issue #216: plain
 # pip missed the multigpu module — current main is fixed, keep -e)
 pip install -q -e "${REPOS_DIR}/LTX-2/packages/ltx-core"
