@@ -133,6 +133,25 @@ class OmniWeavingService:
             input_video = str(video_path)
             if nb_frames < _MIN_FRAMES:
                 input_video = _pad_to_min_frames(input_video, nb_frames, workdir)
+            # generate.py buckets the *source* video by its own aspect (--aspect_ratio is
+            # ignored for editing), and its 4:3 bucket (544x720) dies at cublasCreate on an
+            # 80 GB H100 (2026-09-20). Squash any non-16:9/9:16 source anisotropically to
+            # the 480p landscape/portrait bucket; a full-reference scorer resizes the output
+            # back to the target's geometry, so the composition stays pixel-aligned.
+            ratio = width / height
+            target_ratio = 16 / 9 if aspect == "16:9" else 9 / 16
+            if abs(ratio - target_ratio) > 0.02:
+                bw, bh = (848, 480) if aspect == "16:9" else (480, 848)
+                squashed = workdir / "squashed_input.mp4"
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", input_video, "-vf", f"scale={bw}:{bh}",
+                     "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-an", str(squashed)],
+                    capture_output=True, check=True,
+                )
+                input_video = str(squashed)
+                squashed_to = f"{bw}x{bh}"
+            else:
+                squashed_to = None
 
             venv_torchrun = _kit_root() / "envs" / "hy-omniweaving-v2v" / "bin" / "torchrun"
             torchrun = str(venv_torchrun) if venv_torchrun.exists() else (shutil.which("torchrun") or "torchrun")
@@ -194,6 +213,7 @@ class OmniWeavingService:
                 "aspect_ratio": aspect,
                 "input_frames": nb_frames,
                 "padded": nb_frames < _MIN_FRAMES,
+                "input_squashed_to": squashed_to,
                 "seed": seed,
                 "resolution": "480p",
             },
