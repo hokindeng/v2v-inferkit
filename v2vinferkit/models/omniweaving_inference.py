@@ -37,7 +37,10 @@ from .base import ModelWrapper
 
 _MIN_FRAMES = 33
 # aspect ratios generate.py buckets against (16:9 default)
-_ASPECT_CHOICES = ["16:9", "9:16", "4:3", "3:4", "1:1"]
+# 4:3 / 3:4 / 1:1 buckets are not used: every 4:3 input (bucket 544x720, latent 34x45) died at
+# cublasCreate (CUBLAS_STATUS_ALLOC_FAILED) on an otherwise empty 80 GB H100 during the 2026-09-20
+# Omni-Reason run, while every 16:9 / 9:16 sample ran — so inputs snap to landscape or portrait 16:9.
+_ASPECT_CHOICES = ["16:9", "9:16"]
 
 
 def _kit_root() -> Path:
