@@ -265,6 +265,12 @@ class InferenceRunner:
 
         # Use subprocess for venv models, direct import for API models
         venv_python = _get_model_venv_python(model_name)
+        # Wrappers join output_dir / output_filename; an absolute filename wins, so one
+        # cached wrapper can serve concurrent tasks in different domain folders. It is
+        # set for the subprocess path too: without it every venv wrapper writes
+        # <domain>/video.mp4 first, and two runners sharing an output dir rename each
+        # other's file (2026-09-20: one task's video landed under another task's name).
+        generation_kwargs.setdefault("output_filename", str((domain_dir / f"{task_id}.mp4").resolve()))
         if venv_python:
             result = _run_via_subprocess(
                 model_name, venv_python, image_path, text_prompt,
@@ -272,10 +278,6 @@ class InferenceRunner:
             )
         else:
             wrapper = self._get_or_create_wrapper(model_name)
-            # Hosted wrappers join output_dir / output_filename; an absolute
-            # filename wins, so the wrapper object stays untouched and one cached
-            # wrapper can serve concurrent tasks in different domain folders.
-            generation_kwargs.setdefault("output_filename", str((domain_dir / f"{task_id}.mp4").resolve()))
             result = wrapper.generate(image_path, text_prompt, **generation_kwargs)
 
         self._rename_video_to_task_id(domain_dir, task_id, result)
