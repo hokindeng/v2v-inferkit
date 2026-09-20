@@ -110,9 +110,15 @@ class MiniMaxH3LocalWrapper(ModelWrapper):
             conditions = [{"type": "video", "uri": f"file://{Path(src['path']).resolve()}", "role": "reference"}]
             if image_path and Path(image_path).exists():
                 conditions.append({"type": "image", "uri": f"file://{Path(image_path).resolve()}", "role": "reference"})
+            # Ref2VA prompts name their references (<Video 1>, <Picture 1>…); the bench prompt
+            # is passed as written, with one line binding the input clip to <Video 1>.
+            refs_line = "<Video 1> is the source video for this task; the target video is the result of applying the instruction above to <Video 1>."
+            if len(conditions) > 1:
+                refs_line += " <Picture 1> is a reference image for the task."
+            full_prompt = f"{text_prompt.strip()}\n\n{refs_line}"
             body = {
                 "task": "ref2va",
-                "prompt": text_prompt,
+                "prompt": full_prompt,
                 "conditions": conditions,
                 "target": {"short_edge": self.short_edge, "aspect_ratio": "auto", "duration_seconds": out_s},
                 "seed": seed,
@@ -145,7 +151,7 @@ class MiniMaxH3LocalWrapper(ModelWrapper):
                 "status": "success",
                 "metadata": {
                     "prompt": text_prompt, "modality": "v2v", "pipeline": "sglang /v1/videos ref2va (local weights)",
-                    "request": {k: v for k, v in body.items() if k != "prompt"},
+                    "request": {k: v for k, v in body.items() if k != "prompt"}, "prompt_sent": full_prompt,
                     "input_padded_seconds": src["input_padded_seconds"], "input_cut_seconds": src["input_cut_seconds"],
                     "input_duration_seconds": round(src["info"]["duration"], 3),
                     "output_geometry": f"{out_info['width']}x{out_info['height']}@{out_info['fps']:.3f}fps/{out_info['frames']}f",
