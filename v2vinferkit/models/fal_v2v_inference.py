@@ -404,9 +404,14 @@ def _normalize_video(video_path: Path) -> Tuple[Path, Dict[str, Any]]:
     vf = []
     if fps < 23.976:
         vf.append("fps=24"); changes["fps"] = f"{fps:g}->24"
+    nw, nh = w, h
     if min(w, h) < 720:  # Kling: both dimensions >= 720 -> short side to 720, aspect kept
         sc = 720 / min(w, h)
         nw, nh = int(round(w * sc / 2)) * 2, int(round(h * sc / 2)) * 2
+    if nw * nh > 921_600:  # Grok: area <= 1280x720 -> scale down, aspect kept
+        sc = (921_600 / (nw * nh)) ** 0.5
+        nw, nh = int(nw * sc / 2) * 2, int(nh * sc / 2) * 2
+    if (nw, nh) != (w, h):
         vf.append(f"scale={nw}:{nh}"); changes["size"] = f"{w}x{h}->{nw}x{nh}"
     if not vf:
         return video_path, changes
