@@ -397,16 +397,17 @@ def _has_audio_stream(video_path: Union[str, Path]) -> bool:
 def _normalize_video(video_path: Path) -> Tuple[Path, Dict[str, Any]]:
     """Re-encode a source so every hosted endpoint accepts it: H.264 yuv420p, frame rate
     raised to 24 fps when below 23.976 (fal's floor; duration unchanged, frames duplicated),
-    width raised to 720 px when smaller (fal's Kling floor; aspect kept, even dims). Sources
+    short side raised to 720 px when smaller (fal's Kling floor on both dimensions; aspect kept, even dims). Sources
     already inside every limit are returned untouched. Returns (path, what_changed)."""
     w, h, fps = _probe_video_wh_fps(video_path)
     changes: Dict[str, Any] = {}
     vf = []
     if fps < 23.976:
         vf.append("fps=24"); changes["fps"] = f"{fps:g}->24"
-    if w < 720:
-        nh = int(round(h * 720 / w / 2)) * 2
-        vf.append(f"scale=720:{nh}"); changes["size"] = f"{w}x{h}->720x{nh}"
+    if min(w, h) < 720:  # Kling: both dimensions >= 720 -> short side to 720, aspect kept
+        sc = 720 / min(w, h)
+        nw, nh = int(round(w * sc / 2)) * 2, int(round(h * sc / 2)) * 2
+        vf.append(f"scale={nw}:{nh}"); changes["size"] = f"{w}x{h}->{nw}x{nh}"
     if not vf:
         return video_path, changes
     handle = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
@@ -762,6 +763,12 @@ class FalV2VWrapper(ModelWrapper):
                 duration = extension_seconds(
                     video_path, int(num_frames), integer=profile.get("duration_type") != "float"
                 )
+                # clamp to what the endpoint accepts (grok: integer 2-10 s) instead of failing;
+                # the evaluator resamples the extension to the target length anyway
+                allowed = profile.get("duration_values")
+                if allowed:
+                    lo, hi = min(allowed), max(allowed)
+                    duration = max(lo, min(hi, duration))
             allowed_kwargs = {key: value for key, value in kwargs.items() if key in _CONTROL_KEYS}
             max_wait = kwargs.get("max_wait")
             result = self.service.generate_video(
