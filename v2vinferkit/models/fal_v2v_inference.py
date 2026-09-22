@@ -418,6 +418,8 @@ def _normalize_video(video_path: Path) -> Tuple[Path, Dict[str, Any]]:
         vf.append(f"scale={nw}:{nh}"); changes["size"] = f"{w}x{h}->{nw}x{nh}"
     if not vf and video_path.stat().st_size <= 48 * 1024 * 1024:
         return video_path, changes
+    if not vf:
+        changes["reencoded"] = f"{video_path.stat().st_size >> 20} MiB > 48 MiB upload cap"
     handle = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
     handle.close()
     out = Path(handle.name)
