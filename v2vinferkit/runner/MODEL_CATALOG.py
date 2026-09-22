@@ -40,6 +40,22 @@ KLING_MODELS = {
             "profile": "kling_o1_edit",
         },
     },
+    # Standard tier of the same O3 edit endpoint ($0.126/s on fal vs the pro tier) — the
+    # benchmark default under the frugality rule; same profile, same limits.
+    "kling-o3-standard-video-edit": {
+        "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
+        "wrapper_class": "FalV2VWrapper",
+        "service_class": "FalV2VService",
+        "model": "kling-o3-standard",
+        "modality": "v2v",
+        "description": "Kling O3 Standard video editing via fal.ai",
+        "family": "Kling AI",
+        "args": {
+            "endpoint": "fal-ai/kling-video/o3/standard/video-to-video/edit",
+            "profile": "kling_o3_edit",
+            "max_wait": 3600,
+        },
+    },
     "kling-o3-pro-video-edit": {
         "wrapper_module": "v2vinferkit.models.fal_v2v_inference",
         "wrapper_class": "FalV2VWrapper",

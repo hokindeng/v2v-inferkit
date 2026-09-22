@@ -168,7 +168,8 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
         "input_max": 15.0,
         "duration_type": "integer",
         "duration_values": set(range(2, 11)),
-        "allowed_controls": {"duration"},
+        # resolution: fal bills 480p at $0.06/s vs 720p $0.08/s (+$0.01/s input either way)
+        "allowed_controls": {"duration", "resolution"},
         "defaults": {"duration": 6},
     },
     "veo31_extend": {
