@@ -416,12 +416,12 @@ def _normalize_video(video_path: Path) -> Tuple[Path, Dict[str, Any]]:
         nw, nh = int(nw * sc / 2) * 2, int(nh * sc / 2) * 2
     if (nw, nh) != (w, h):
         vf.append(f"scale={nw}:{nh}"); changes["size"] = f"{w}x{h}->{nw}x{nh}"
-    if not vf:
+    if not vf and video_path.stat().st_size <= 48 * 1024 * 1024:
         return video_path, changes
     handle = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
     handle.close()
     out = Path(handle.name)
-    cmd = ["ffmpeg", "-y", "-i", str(video_path), "-map", "0:v:0", "-vf", ",".join(vf),
+    cmd = ["ffmpeg", "-y", "-i", str(video_path), "-map", "0:v:0"] + (["-vf", ",".join(vf)] if vf else []) + [
            "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p", "-an", str(out)]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
