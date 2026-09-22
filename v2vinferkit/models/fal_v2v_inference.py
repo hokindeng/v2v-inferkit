@@ -452,6 +452,21 @@ def _probe_video_wh_fps(video_path: Path) -> Tuple[int, int, float]:
     return int(st["width"]), int(st["height"]), float(num) / float(den)
 
 
+def _speed_up_video(video_path: Path, factor: float, target_duration: float) -> Path:
+    """Play the clip `factor` times faster so it lasts `target_duration` (same frame rate)."""
+    handle = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    handle.close()
+    out = Path(handle.name)
+    cmd = ["ffmpeg", "-y", "-i", str(video_path), "-map", "0:v:0", "-vf", f"setpts=PTS/{factor:.6f}",
+           "-t", f"{target_duration - 0.05:.3f}", "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+           "-pix_fmt", "yuv420p", "-an", str(out)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        out.unlink(missing_ok=True)
+        raise RuntimeError(f"ffmpeg speed-up failed: {result.stderr[-500:]}")
+    return out
+
+
 def _pad_video(video_path: Path, source_duration: float, target_duration: float) -> Path:
     """Extend a short clip by cloning its FIRST frame in front of it.
 
@@ -528,15 +543,19 @@ class FalV2VService:
             raise FileNotFoundError(f"Conditioning video not found: {path}")
 
         duration = _probe_video_duration(path)
-        maximum = self.profile.get("input_max")
-        if maximum is not None and duration > float(maximum) + 0.01:
-            raise ValueError(
-                f"{self.endpoint} accepts at most {maximum:g}s of source video; "
-                f"input is {duration:.3f}s"
-            )
-
         path, self.last_normalization = _normalize_video(path)
         is_temp = bool(self.last_normalization)
+        maximum = self.profile.get("input_max")
+        if maximum is not None and duration > float(maximum) + 0.01:
+            # Hokin 2026-09-22 「你压缩一下」: a source longer than the endpoint's limit is
+            # time-compressed to fit (whole content kept, frame rate kept) instead of refused;
+            # the evaluator resamples the output to the target's length anyway.
+            factor = duration / float(maximum)
+            sped = _speed_up_video(path, factor, float(maximum))
+            if is_temp:
+                path.unlink(missing_ok=True)
+            path, is_temp, duration = sped, True, float(maximum)
+            self.last_normalization["speedup"] = round(factor, 3)
         minimum = self.profile.get("input_min")
         if minimum is not None and duration < float(minimum):
             padded = _pad_video(path, duration, float(minimum))
