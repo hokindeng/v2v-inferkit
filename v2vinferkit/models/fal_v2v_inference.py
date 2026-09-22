@@ -65,6 +65,8 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
     },
     "gemini_omni": {
         "video_field": "video_url",
+        # v1.0 accepts a resolution field but returned 1280x720 for 360p (2026-09-22) — no cheaper tier
+        "allowed_controls": {"resolution"},
     },
     "wan3": {
         "video_field": "reference_video_urls",
