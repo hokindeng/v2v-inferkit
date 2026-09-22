@@ -119,6 +119,7 @@ _PROFILES: Dict[str, Dict[str, Any]] = {
     "seedance_2_5": {
         "video_field": "video_urls",
         "video_is_list": True,
+        "input_min": 2.0,  # fal: "Video duration is too short. Minimum is 1.8 seconds" (2026-09-22)
         "input_max": 30.0,
         "output_min": 4,
         "output_max": 30,
@@ -421,11 +422,20 @@ def _normalize_video(video_path: Path) -> Tuple[Path, Dict[str, Any]]:
     handle.close()
     out = Path(handle.name)
     cmd = ["ffmpeg", "-y", "-i", str(video_path), "-map", "0:v:0", "-vf", ",".join(vf),
-           "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-an", str(out)]
+           "-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p", "-an", str(out)]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         out.unlink(missing_ok=True)
         raise RuntimeError(f"ffmpeg normalize failed: {result.stderr[-500:]}")
+    # fal upload limit is 50 MB (grok): re-encode at a capped bitrate when a long clip exceeds it
+    if out.stat().st_size > 48 * 1024 * 1024:
+        dur = max(1.0, _probe_video_duration(out))
+        kbps = int(40 * 1024 * 8 / dur * 0.9)  # aim at ~40 MB
+        cmd2 = ["ffmpeg", "-y", "-i", str(out), "-c:v", "libx264", "-preset", "fast", "-b:v", f"{kbps}k",
+                "-maxrate", f"{kbps}k", "-bufsize", f"{2*kbps}k", "-pix_fmt", "yuv420p", "-an", str(out) + ".small.mp4"]
+        r2 = subprocess.run(cmd2, capture_output=True, text=True)
+        if r2.returncode == 0:
+            out.unlink(missing_ok=True); out = Path(str(out) + ".small.mp4"); changes["bitrate_capped_kbps"] = kbps
     return out, changes
 
 
