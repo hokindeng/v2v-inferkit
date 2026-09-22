@@ -7,6 +7,7 @@ across providers while preserving their different input field names.
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
@@ -393,6 +394,44 @@ def _has_audio_stream(video_path: Union[str, Path]) -> bool:
     return result.returncode == 0 and bool(result.stdout.strip())
 
 
+def _normalize_video(video_path: Path) -> Tuple[Path, Dict[str, Any]]:
+    """Re-encode a source so every hosted endpoint accepts it: H.264 yuv420p, frame rate
+    raised to 24 fps when below 23.976 (fal's floor; duration unchanged, frames duplicated),
+    width raised to 720 px when smaller (fal's Kling floor; aspect kept, even dims). Sources
+    already inside every limit are returned untouched. Returns (path, what_changed)."""
+    w, h, fps = _probe_video_wh_fps(video_path)
+    changes: Dict[str, Any] = {}
+    vf = []
+    if fps < 23.976:
+        vf.append("fps=24"); changes["fps"] = f"{fps:g}->24"
+    if w < 720:
+        nh = int(round(h * 720 / w / 2)) * 2
+        vf.append(f"scale=720:{nh}"); changes["size"] = f"{w}x{h}->720x{nh}"
+    if not vf:
+        return video_path, changes
+    handle = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    handle.close()
+    out = Path(handle.name)
+    cmd = ["ffmpeg", "-y", "-i", str(video_path), "-map", "0:v:0", "-vf", ",".join(vf),
+           "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p", "-an", str(out)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        out.unlink(missing_ok=True)
+        raise RuntimeError(f"ffmpeg normalize failed: {result.stderr[-500:]}")
+    return out, changes
+
+
+def _probe_video_wh_fps(video_path: Path) -> Tuple[int, int, float]:
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=width,height,r_frame_rate", "-of", "json", str(video_path)],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    st = json.loads(out)["streams"][0]
+    num, den = st["r_frame_rate"].split("/")
+    return int(st["width"]), int(st["height"]), float(num) / float(den)
+
+
 def _pad_video(video_path: Path, source_duration: float, target_duration: float) -> Path:
     """Extend a short clip by cloning its FIRST frame in front of it.
 
@@ -476,11 +515,15 @@ class FalV2VService:
                 f"input is {duration:.3f}s"
             )
 
+        path, self.last_normalization = _normalize_video(path)
+        is_temp = bool(self.last_normalization)
         minimum = self.profile.get("input_min")
         if minimum is not None and duration < float(minimum):
             padded = _pad_video(path, duration, float(minimum))
+            if is_temp:
+                path.unlink(missing_ok=True)
             return padded, float(minimum), True
-        return path, duration, False
+        return path, duration, is_temp
 
     def build_payload(
         self,
@@ -666,7 +709,8 @@ class FalV2VService:
                 "prompt_sent": payload.get("prompt"),
                 "source_duration": source_duration,
                 "input_duration": input_duration,
-                "input_padded_seconds": round(input_duration - source_duration, 3) if is_temp else 0.0,
+                "input_padded_seconds": round(input_duration - source_duration, 3) if input_duration > source_duration else 0.0,
+                "input_normalized": getattr(self, "last_normalization", {}),
                 "output_geometry": output_geometry,
                 "response": response,
             }
