@@ -83,6 +83,10 @@ class UniVideoService:
         if self.pipe is not None:
             return
         import torch
+
+        # Initialise CUDA before anything imports decord (upstream utils does at import time):
+        # with decord loaded first, torch.cuda._lazy_init segfaulted in this torch 2.4.1 env.
+        torch.cuda.init()
         import yaml
         from accelerate import init_empty_weights
 
@@ -134,18 +138,18 @@ class UniVideoService:
     def generate_video(self, video_path, prompt, output_path: Path, *, max_frames=61, height=480, width=854,
                        num_inference_steps=30, guidance_scale=7.0, image_guidance_scale=2.0, timestep_shift=7.0,
                        seed=42) -> Dict[str, Any]:
+        source = str(require_file(video_path, "source video"))
+        self._load()
         import decord
         import numpy as np
         from diffusers.utils import export_to_video
 
-        source = str(require_file(video_path, "source video"))
         probe = decord.VideoReader(source, ctx=decord.cpu(0))
         src_count, src_fps = len(probe), float(probe.get_avg_fps())
         del probe
         if src_count < 1:
             raise LocalInferenceError(f"No frames decoded from {source}")
         count = len(_sample_indices(src_count, max_frames))
-        self._load()
         out = self.pipe(
             prompts=[prompt], negative_prompt=NEGATIVE_PROMPT, cond_video_path=source,
             height=height, width=width, num_frames=count, num_inference_steps=num_inference_steps,
