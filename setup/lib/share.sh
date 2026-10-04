@@ -37,6 +37,12 @@ declare -a LOCAL_MODELS=(
     "magi-24b-v2v"
     "ltx-2.3-dev-v2v"
     "cosmos3-super-v2v"
+    "lance-3b-v2v"
+    "longcat-video-extend-v2v"
+    "open-sora-2.0-extend-v2v"
+    "univideo-v2v"
+    "skyreels-v2-df-1.3b-extend-v2v"
+    "self-forcing-extend-v2v"
 )
 
 # Backward-compatible name used by older setup callers.

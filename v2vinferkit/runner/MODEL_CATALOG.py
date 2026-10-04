@@ -655,6 +655,96 @@ LOCAL_EXTRA_MODELS = {
     },
 }
 
+# Six more open-weight models for the Omni-Reason bench, added 2026-10-04. Four of them
+# can only continue a clip (no instruction editing): their output is the continuation,
+# with the target length read from ground_truth.mp4, as in ltx-2.3-extend-local.
+OR_BENCH_2026_10_MODELS = {
+    "lance-3b-v2v": {
+        "wrapper_module": "v2vinferkit.models.lance_inference",
+        "wrapper_class": "LanceWrapper",
+        "service_class": "LanceService",
+        "model": "bytedance-research/Lance",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "Lance 3B-active unified model, official video_edit task",
+        "family": "Lance",
+        "gpu": "1x80GB",
+        "resolution": "480p, input aspect",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": None, "url": "https://huggingface.co/bytedance-research/Lance"},
+    },
+    "longcat-video-extend-v2v": {
+        "wrapper_module": "v2vinferkit.models.longcat_inference",
+        "wrapper_class": "LongCatExtendWrapper",
+        "service_class": "LongCatExtendService",
+        "model": "meituan-longcat/LongCat-Video",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_continuation",
+        "description": "LongCat-Video 13.6B video continuation, distill LoRA 16 steps; output = continuation only",
+        "family": "LongCat-Video",
+        "gpu": "1x80GB",
+        "resolution": "480p",
+        "license": {"code": "MIT", "weights": "MIT", "commercial_use": None, "url": "https://huggingface.co/meituan-longcat/LongCat-Video"},
+    },
+    "open-sora-2.0-extend-v2v": {
+        "wrapper_module": "v2vinferkit.models.opensora2_inference",
+        "wrapper_class": "OpenSora2ExtendWrapper",
+        "service_class": "OpenSora2ExtendService",
+        "model": "hpcai-tech/Open-Sora-v2",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_continuation",
+        "description": "Open-Sora 2.0 11B v2v_tail extension at 256px; output = continuation only",
+        "family": "Open-Sora",
+        "gpu": "1x80GB",
+        "resolution": "256px",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": None, "url": "https://huggingface.co/hpcai-tech/Open-Sora-v2"},
+    },
+    "univideo-v2v": {
+        "wrapper_module": "v2vinferkit.models.univideo_inference",
+        "wrapper_class": "UniVideoWrapper",
+        "service_class": "UniVideoService",
+        "model": "KlingTeam/UniVideo",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_editing",
+        "description": "UniVideo (Qwen2.5-VL-7B + HunyuanVideo MMDiT) official video_edit task, 61 frames / 30 steps",
+        "family": "UniVideo",
+        "gpu": "1x80GB",
+        "resolution": "854x480",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": None, "url": "https://github.com/KlingTeam/UniVideo"},
+    },
+    "skyreels-v2-df-1.3b-extend-v2v": {
+        "wrapper_module": "v2vinferkit.models.skyreels_inference",
+        "wrapper_class": "SkyReelsDFExtendWrapper",
+        "service_class": "SkyReelsDFExtendService",
+        "model": "Skywork/SkyReels-V2-DF-1.3B-540P",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_continuation",
+        "description": "SkyReels-V2 Diffusion Forcing 1.3B video extension; output = continuation only",
+        "family": "SkyReels-V2",
+        "gpu": "1x80GB",
+        "resolution": "540p",
+        "license": {"code": "Skywork Community License", "weights": "Skywork Community License", "commercial_use": None, "url": "https://huggingface.co/Skywork/SkyReels-V2-DF-1.3B-540P"},
+    },
+    "self-forcing-extend-v2v": {
+        "wrapper_module": "v2vinferkit.models.self_forcing_inference",
+        "wrapper_class": "SelfForcingExtendWrapper",
+        "service_class": "SelfForcingExtendService",
+        "model": "gdhe17/Self-Forcing",
+        "modality": "v2v",
+        "deployment": "local",
+        "capability": "video_continuation",
+        "description": "Self-Forcing (Wan2.1-1.3B, DMD) continuation from the input clip's latents; output = continuation only",
+        "family": "Self-Forcing",
+        "gpu": "1x24GB",
+        "resolution": "832x480",
+        "license": {"code": "Apache-2.0", "weights": "Apache-2.0", "commercial_use": None, "url": "https://huggingface.co/gdhe17/Self-Forcing"},
+    },
+}
+
 AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
     **LUMA_MODELS,
     **KLING_MODELS,
@@ -682,6 +772,7 @@ AVAILABLE_MODELS: Dict[str, Dict[str, Any]] = {
     **LTX23_MODELS,
     **COSMOS3_MODELS,
     **LOCAL_EXTRA_MODELS,
+    **OR_BENCH_2026_10_MODELS,
 }
 
 MODEL_FAMILIES: Dict[str, Dict[str, Dict[str, Any]]] = {
@@ -710,6 +801,7 @@ MODEL_FAMILIES: Dict[str, Dict[str, Dict[str, Any]]] = {
     "LTX video-conditioned generation": LTX23_MODELS,
     "MAGI video continuation": MAGI_MODELS,
     "NVIDIA Cosmos controlled transfer": COSMOS3_MODELS,
+    "Omni-Reason bench additions 2026-10": OR_BENCH_2026_10_MODELS,
 }
 
 
