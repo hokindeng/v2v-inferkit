@@ -11,6 +11,17 @@ from .base import ModelWrapper
 from .local_utils import failed_result, require_file, success_result, weights_path
 
 
+def _probe_fps(path) -> float:
+    import subprocess
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate",
+                              "-of", "csv=p=0", str(path)], capture_output=True, text=True, check=True).stdout.strip()
+        num, den = out.split("/")
+        return float(num) / float(den)
+    except Exception:
+        return 0.0
+
+
 class LucyService:
     def __init__(self, model="decart-ai/Lucy-Edit-1.1-Dev"):
         self.model = model
@@ -35,16 +46,23 @@ class LucyService:
         from PIL import Image
         from diffusers.utils import export_to_video, load_video
         source = require_file(video_path, "source video")
-        frames = load_video(str(source))[:num_frames]
+        frames = load_video(str(source))
         if not frames:
             raise ValueError(f"No frames decoded from {source}")
-        count = ((len(frames) - 1) // 4) * 4 + 1
-        frames = [frame.resize((width, height), Image.Resampling.LANCZOS) for frame in frames[:count]]
+        src_count = len(frames)
+        # Longer sources are sampled evenly across the whole clip (not truncated) and the
+        # output fps is set so the edit spans the source's duration.
+        count = ((min(src_count, num_frames) - 1) // 4) * 4 + 1
+        idx = [round(i * (src_count - 1) / max(count - 1, 1)) for i in range(count)]
+        frames = [frames[i].resize((width, height), Image.Resampling.LANCZOS) for i in idx]
+        src_fps = _probe_fps(source)
+        if src_fps:
+            fps = max(1.0, count * src_fps / src_count)
         self._load()
         result = self.pipe(prompt=prompt, video=frames, negative_prompt=negative_prompt, height=height, width=width, num_frames=len(frames), num_inference_steps=num_inference_steps, guidance_scale=guidance_scale, generator=torch.Generator().manual_seed(seed)).frames[0]
         output_path.parent.mkdir(parents=True, exist_ok=True)
         export_to_video(result, str(output_path), fps=fps)
-        return {"checkpoint": str(self.checkpoint if self.checkpoint.is_dir() else self.model), "num_frames": len(frames), "height": height, "width": width, "num_inference_steps": num_inference_steps, "guidance_scale": guidance_scale, "seed": seed, "fps": fps}
+        return {"checkpoint": str(self.checkpoint if self.checkpoint.is_dir() else self.model), "source_frames": src_count, "num_frames": len(frames), "height": height, "width": width, "num_inference_steps": num_inference_steps, "guidance_scale": guidance_scale, "seed": seed, "fps": fps}
 
 
 class LucyWrapper(ModelWrapper):
