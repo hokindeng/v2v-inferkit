@@ -14,7 +14,7 @@ pip install -q torch==2.8.0 torchvision==0.23.0 --index-url https://download.pyt
 # Minimal subset of upstream requirements.txt for the inference path (no TensorRT/ONNX/GUI/training deps).
 pip install -q "diffusers==0.31.0" "transformers>=4.49,<4.57" "tokenizers>=0.20.3" "accelerate>=1.1.1" \
     "numpy<2" omegaconf einops easydict ftfy regex tqdm imageio imageio-ffmpeg pillow \
-    python-dotenv "huggingface_hub[cli]"
+    python-dotenv httpx "huggingface_hub[cli]"  # dotenv + httpx: run.py imports in-process
 # Upstream cross-attention calls flash_attention() directly (no SDPA fallback): prebuilt wheel
 # matching torch 2.8 / CUDA 12 / cp310 / cxx11 ABI (no source build).
 pip install -q "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl"
