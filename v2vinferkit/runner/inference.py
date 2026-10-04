@@ -5,10 +5,13 @@ Two dispatch paths:
 - Local/open-weight models: if envs/<venv_id>/bin/python exists, inference runs in a
   subprocess inside that model-specific venv via models/_subprocess_worker.py
   (heavy deps like torch/diffusers stay out of the core process).
+  V2V_IN_PROCESS=1 skips the subprocess: start run.py with the model venv's python
+  (plus python-dotenv) and the cached wrapper keeps the weights loaded across tasks.
 """
 
 import importlib
 import json
+import os
 import subprocess
 import time
 from datetime import datetime
@@ -59,7 +62,9 @@ def _build_failed_result(
 
 
 def _get_model_venv_python(model_name: str) -> Optional[str]:
-    """Get the venv Python path for a model, or None if no venv exists."""
+    """Get the venv Python path for a model, or None if no venv exists (or V2V_IN_PROCESS=1)."""
+    if os.environ.get("V2V_IN_PROCESS") == "1":
+        return None
     # Check catalog for venv_id override, otherwise use model_name
     config = AVAILABLE_MODELS.get(model_name, {})
     venv_id = config.get("venv_id", model_name)
