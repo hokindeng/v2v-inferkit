@@ -61,6 +61,19 @@ def _probe(path: Union[str, Path]) -> Dict[str, float]:
     return {"width": int(s["width"]), "height": int(s["height"]), "fps": fps, "frames": n, "duration": dur}
 
 
+def _stub_tensornvme():
+    """opensora/utils/ckpt.py imports tensornvme (async checkpoint *writing*, training only) at
+    module level; it is a compiled extension we do not need for inference."""
+    try:
+        import tensornvme.async_file_io  # noqa: F401
+    except ImportError:
+        import types
+        pkg, mod = types.ModuleType("tensornvme"), types.ModuleType("tensornvme.async_file_io")
+        mod.AsyncFileWriter = object
+        pkg.async_file_io = mod
+        sys.modules["tensornvme"], sys.modules["tensornvme.async_file_io"] = pkg, mod
+
+
 class OpenSora2ExtendService:
     def __init__(self, model: str = "hpcai-tech/Open-Sora-v2"):
         self.model = model
@@ -79,6 +92,7 @@ class OpenSora2ExtendService:
             require_file(self.ckpt_dir / name, f"Open-Sora-v2 {name}")
         if str(self.repo) not in sys.path:
             sys.path.insert(0, str(self.repo))
+        _stub_tensornvme()
         import torch
         from mmengine.config import Config
         from opensora.utils.sampling import prepare_api, prepare_models
