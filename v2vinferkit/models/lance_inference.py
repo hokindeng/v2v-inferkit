@@ -229,7 +229,7 @@ class LanceService:
                 "interleave_array": [prompt, str(clip), str(clip)],
                 "element_dtype_array": ["text", "video", "video"],
                 "istarget_in_interleave": [0, 0, 1],
-            }}, ensure_ascii=False), encoding="utf-8")
+            }}, ensure_ascii=False, indent=2), encoding="utf-8")  # multi-line: upstream tries JSONL first
 
             model_args = deepcopy(st["model_args"])
             model_args.cfg_text_scale = float(guidance_scale)
