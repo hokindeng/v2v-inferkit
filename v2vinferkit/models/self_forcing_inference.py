@@ -213,5 +213,7 @@ class SelfForcingExtendWrapper(ModelWrapper):
             metadata = self.service.generate_video(video_path, text_prompt, output, target_seconds,
                                                    seed=int(kwargs.get("seed", 42) or 42))
         except Exception as exc:  # noqa: BLE001
-            return failed_result(self.model, text_prompt, start, exc, video_path)
+            import traceback
+            detail = f"{type(exc).__name__}: {exc} | {traceback.format_exc()[-1200:]}"
+            return failed_result(self.model, text_prompt, start, detail, video_path)
         return success_result(self.model, text_prompt, start, output, video_path, "selfforcing", metadata)
