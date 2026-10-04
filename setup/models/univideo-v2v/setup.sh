@@ -14,7 +14,8 @@ create_model_venv "$MODEL"
 activate_model_venv "$MODEL"
 # Upstream is tested with torch 2.4.1 + CUDA 12.1, diffusers 0.34.0, transformers 4.51.3.
 pip install -q torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu121
-pip install -q -r "${REPOS_DIR}/UniVideo/requirements.txt" pyyaml python-dotenv
+# python-dotenv + httpx: run.py and its output probe when run in-process inside this venv.
+pip install -q -r "${REPOS_DIR}/UniVideo/requirements.txt" pyyaml python-dotenv httpx
 HF_BIN="$(get_model_venv_path "$MODEL")/bin/hf"
 deactivate
 
