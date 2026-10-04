@@ -5,9 +5,15 @@ Qwen3-VL-30B-A3B once and then loops over a prompt list. This wrapper imports th
 and splits it in two: `_load` builds the pipeline exactly like the script's generate() does (args come
 from the script's own argparse defaults), and `generate_video` runs the body of its per-prompt loop
 (VAE encode -> Qwen3-VL caption + features -> T5 -> DiT sampling -> cache_video) with the upstream
-helpers. Components stay in CPU RAM and are moved to the GPU stage by stage, as upstream does, so the
+helpers. Frames are sampled evenly across the whole clip with decord + the upstream transform (the
+upstream reader only takes every k-th frame from the start). Components stay in CPU RAM and are moved to the GPU stage by stage, as upstream does, so the
 A14B experts (2x28.6 GB) and the 62 GB VLM take turns on one 80 GB GPU. With V2V_IN_PROCESS=1 the
 loaded pipeline is reused across tasks; without it each task's worker process loads it once.
+
+Settings are the official launcher/README ones (tools/inference/inference_omni_v2v*.sh): 41 frames,
+guide scale 3.0, shift 5, 40 unipc steps, 1.3B max_context_len 6272. The frame count matters: the DiT
+context is [VLM | T5 | source latents] cut at max_context_len, and the source latents cost 390 tokens per
+latent frame at 832x480, so 81 frames (21 latent frames, ~8.2k tokens) would truncate most of the source.
 """
 
 from __future__ import annotations
@@ -15,10 +21,8 @@ from __future__ import annotations
 import copy
 import gc
 import importlib.util
-import json
 import os
 import socket
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -28,16 +32,7 @@ from .base import ModelWrapper
 from .local_utils import failed_result, repo_path, require_dir, require_file, success_result, weights_path
 
 
-def _probe_frames_fps(path):
-    try:
-        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries",
-                              "stream=r_frame_rate,nb_read_frames", "-of", "json", str(path)],
-                             capture_output=True, text=True, check=True).stdout
-        st = json.loads(out)["streams"][0]
-        num, den = st["r_frame_rate"].split("/")
-        return int(st.get("nb_read_frames") or 0), float(num) / float(den)
-    except Exception:
-        return 0, 0.0
+MAX_FRAMES = int(os.environ.get("OMNIVIDEO2_FRAMES", "41"))  # official default; must be 4n+1
 
 
 def _init_single_rank_group():
@@ -69,6 +64,7 @@ class OmniVideo2Service:
         self.pipe = None        # OmniVideoX2XUnified[1_3B]
         self.qwen_model = None  # loaded lazily on the first sample, as upstream does
         self.qwen_processor = None
+        self.load_report = {}
 
     def _load(self):
         if self.pipe is not None:
@@ -90,9 +86,12 @@ class OmniVideo2Service:
 
         argv = sys.argv
         sys.argv = [str(script), "--task", self.task, "--size", "832*480", "--ckpt_dir", str(self.checkpoint),
-                    "--qwen3vl_model_path", str(self.qwen), "--base_seed", "42"]
+                    "--qwen3vl_model_path", str(self.qwen), "--base_seed", "42", "--frame_num", str(MAX_FRAMES),
+                    "--sample_guide_scale", "3.0", "--sample_shift", "5"]  # official launcher values
+        if self.single:
+            sys.argv += ["--max_context_len", "6272"]  # inference_omni_v2v_1_3B.sh
         try:
-            args = up._parse_args()  # upstream defaults + _validate_args (checkpoint paths, 40 steps, shift 5)
+            args = up._parse_args()  # remaining upstream defaults + _validate_args (checkpoint paths, 40 steps)
         finally:
             sys.argv = argv
         _init_single_rank_group()
@@ -120,23 +119,36 @@ class OmniVideo2Service:
             for k in list(state_dict.keys()):
                 if isinstance(state_dict[k], torch.Tensor):
                     state_dict[k] = state_dict[k].to(cfg.param_dtype)
-            getattr(pipe, attr).load_state_dict(state_dict, strict=False)
+            missing, unexpected = getattr(pipe, attr).load_state_dict(state_dict, strict=False)
+            self.load_report[attr] = {"missing_keys": len(missing), "unexpected_keys": len(unexpected)}
             del state_dict
             gc.collect()
         self.up, self.args, self.cfg, self.pipe = up, args, cfg, pipe
 
-    def _run_sample(self, source: str, prompt: str, output_path: Path, frame_num: int, sampling_rate: int,
-                    sample_fps: int) -> str:
-        """Body of the upstream per-prompt loop for one (source, prompt) pair; returns the target caption."""
+    def _read_source(self, source: str):
+        """Evenly spaced frames over the whole clip -> (tensor [T,C,H,W], size, frame_num, out fps, info)."""
+        import numpy as np
+
+        up = self.up
+        vr = up.decord.VideoReader(source)
+        total, src_fps = len(vr), float(vr.get_avg_fps())
+        h, w = vr[0].shape[:2]
+        size = "480*832" if h > w else "832*480"  # both supported; the upstream reader skips mismatched orientations
+        frame_num = max(1, ((min(self.args.frame_num, total) - 1) // 4) * 4 + 1)
+        idx = np.linspace(0, total - 1, frame_num).round().astype(int).tolist()
+        target_size = up.SIZE_CONFIGS[size]
+        frames = up.transform_frames_to_tensor(vr.get_batch(idx).asnumpy(), (target_size[1], target_size[0]))
+        out_fps = round(frame_num * src_fps / total, 3) if src_fps > 0 else 8  # output spans the source duration
+        return frames, size, frame_num, out_fps, {"source_frames": total, "source_fps": round(src_fps, 3)}
+
+    def _run_sample(self, source: str, prompt: str, output_path: Path) -> Dict[str, Any]:
+        """Body of the upstream per-prompt loop for one (source, prompt) pair."""
         import torch
 
         up, args, cfg, pipe = self.up, self.args, self.cfg, self.pipe
         device = 0
-        target_size = up.SIZE_CONFIGS[args.size]
-        frames = up.read_video_frames(source, frame_num, sampling_rate, args.skip_num, (target_size[1], target_size[0]))
-        if frames is None:
-            raise RuntimeError("upstream reader rejected the source video (too few frames, or portrait source "
-                               "for a landscape target)")
+        frames, size, frame_num, sample_fps, info = self._read_source(source)
+        target_size = up.SIZE_CONFIGS[size]
 
         with torch.no_grad():
             frames = frames.to(device)
@@ -208,35 +220,14 @@ class OmniVideo2Service:
         del video, visual_emb, ar_vision_input, precomputed_context, embs
         gc.collect()
         torch.cuda.empty_cache()
-        return caption
+        return {"size": size, "num_frames": frame_num, "fps": sample_fps, **info, "target_caption": caption}
 
-    def generate_video(
-        self,
-        video_path: Union[str, Path],
-        prompt: str,
-        output_path: Path,
-        *,
-        num_frames: int = 41,
-        fps: int = 8,
-        sampling_rate: int = 3,
-    ) -> Dict[str, Any]:
+    def generate_video(self, video_path: Union[str, Path], prompt: str, output_path: Path, **_) -> Dict[str, Any]:
         source = require_file(video_path, "source video")
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        num_frames = max(1, min(int(num_frames), 81))
-        # Cover the whole source: the official reader takes frame_num frames every
-        # sampling_rate frames from the start, so derive the rate from the clip length and
-        # write the output at source_fps / rate (the edit then spans the source's duration).
-        src_frames, src_fps = _probe_frames_fps(source)
-        if src_frames:
-            num_frames = min(num_frames, src_frames)
-            num_frames = max(1, ((num_frames - 1) // 4) * 4 + 1)
-            sampling_rate = max(1, src_frames // num_frames)
-            if src_fps:
-                fps = max(1, round(src_fps / sampling_rate))
-        num_frames = ((num_frames - 1) // 4) * 4 + 1
         self._load()
         try:
-            caption = self._run_sample(str(source), prompt, output_path, num_frames, sampling_rate, fps)
+            sample = self._run_sample(str(source), prompt, output_path)
         except Exception:
             # park everything on CPU again so the next task starts from the same state
             self.up.offload_model_to_cpu(self.pipe)
@@ -245,10 +236,10 @@ class OmniVideo2Service:
         require_file(output_path, "OmniVideo2 output video")
         a = self.args
         return {"task": self.task, "checkpoint": str(self.checkpoint), "qwen_checkpoint": str(self.qwen),
-                "num_frames": num_frames, "source_frames": src_frames, "sampling_rate": sampling_rate, "size": a.size,
-                "num_inference_steps": a.sample_steps, "guide_scale": a.sample_guide_scale, "shift": a.sample_shift,
-                "solver": a.sample_solver, "seed": a.base_seed, "fps": fps,
-                "vlm_video_max_duration": a.video_max_duration, "target_caption": caption}
+                "frame_sampling": "even over the whole clip", "num_inference_steps": a.sample_steps,
+                "guide_scale": a.sample_guide_scale, "shift": a.sample_shift, "solver": a.sample_solver,
+                "seed": a.base_seed, "max_context_len": a.max_context_len,
+                "vlm_video_max_duration": a.video_max_duration, "weights_load": self.load_report, **sample}
 
 
 class OmniVideo2Wrapper(ModelWrapper):
