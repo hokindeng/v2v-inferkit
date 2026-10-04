@@ -5,16 +5,15 @@ Uses SkyReelsV2DiffusionForcingVideoToVideoPipeline (the diffusers port of the o
 generate_video_df.py --video_path extension): the last `overlap_history` = 17 frames of the
 input (resampled to 24 fps, the model's native rate) are VAE-encoded as clean prefix latents
 and the model denoises the following latents with diffusion forcing; longer targets run in
-97-frame windows that each re-use the last 17 frames as history. Settings follow the official
-extension recipe (base_num_frames 97, overlap_history 17, addnoise_condition 20, synchronous
+97-frame windows (one pipeline call each) that re-encode the last 17 generated frames as history,
+as the official extend_video does. Settings follow the official extension recipe (base_num_frames 97, overlap_history 17, addnoise_condition 20, synchronous
 ar_step 0, shift 8, guidance 6, official negative prompt) with 30 sampling steps.
 
 Resolution is 540p-class with the input's aspect ratio kept (pixel area of 960x544, sides
 multiples of 16). The generated length covers the target clip's duration (ground_truth.mp4),
-capped at 10 s (257 frames including the 17-frame prefix, SKYREELS_MAX_SECONDS). The pipeline
-returns input + decoded(prefix + new); the input frames and the 17 reproduced prefix frames are
-dropped, so the saved mp4 holds only the continuation, trimmed to the target duration, at 24
-fps without audio. Weights are loaded once per Service and stay on the GPU between tasks.
+capped at 10 s (240 new frames, SKYREELS_MAX_SECONDS). Each call returns history +
+decoded(prefix + new); the history and the 17 reproduced prefix frames are dropped, so the
+saved mp4 holds only the continuation, trimmed to the target duration, at 24 fps without audio. Weights are loaded once per Service and stay on the GPU between tasks.
 """
 from __future__ import annotations
 
@@ -128,26 +127,37 @@ class SkyReelsDFExtendService:
         cap_new = ((int(self.max_seconds * FPS)) // 4) * 4
         capped = need > cap_new
         want = min(need, cap_new)
-        num_frames = OVERLAP + int(math.ceil(want / 4)) * 4  # 4k+1 since OVERLAP = 4*4+1
-        tail = _decode_tail(source, OVERLAP, width, height)
-        frames_in = [Image.fromarray(f) for f in tail]
+        history = _decode_tail(source, OVERLAP, width, height)
 
         self._load()
         torch.manual_seed(seed)
         gen = torch.Generator(device="cuda").manual_seed(seed)
         t0 = time.time()
-        out = self.pipe(
-            video=frames_in, prompt=prompt, negative_prompt=NEGATIVE_PROMPT, height=height, width=width,
-            num_frames=num_frames, num_inference_steps=self.steps, guidance_scale=self.guidance,
-            generator=gen, overlap_history=OVERLAP, addnoise_condition=self.addnoise,
-            base_num_frames=BASE_FRAMES, ar_step=0, fps=FPS, output_type="np",
-        ).frames[0]
+        # One pipeline call per <=97-frame window, each conditioned on the last 17 DECODED frames
+        # (re-encoded as a fresh clip), as the official extend_video does. The diffusers pipeline's
+        # own multi-window loop re-uses mid-sequence latents as the next window's prefix instead,
+        # and its later windows came out as noise (smoke test 2026-10-04).
+        chunks, windows, remaining = [], [], want
+        while remaining > 0:
+            step = min(remaining, BASE_FRAMES - OVERLAP)
+            num_frames = OVERLAP + int(math.ceil(step / 4)) * 4  # 4k+1 since OVERLAP = 4*4+1
+            out = self.pipe(
+                video=[Image.fromarray(f) for f in history], prompt=prompt, negative_prompt=NEGATIVE_PROMPT,
+                height=height, width=width, num_frames=num_frames, num_inference_steps=self.steps,
+                guidance_scale=self.guidance, generator=gen, overlap_history=OVERLAP,
+                addnoise_condition=self.addnoise, base_num_frames=BASE_FRAMES, ar_step=0, fps=FPS,
+                output_type="np",
+            ).frames[0]
+            # out = input history (17) + decoded(prefix 17 + new); keep only the new frames
+            fresh = (np.clip(np.asarray(out)[2 * OVERLAP:], 0, 1) * 255).round().astype(np.uint8)
+            if len(fresh) == 0:
+                raise RuntimeError(f"pipeline returned {len(out)} frames, none after the prefix")
+            history = np.concatenate([history, fresh], axis=0)[-OVERLAP:]
+            chunks.append(fresh[:step])
+            windows.append(num_frames)
+            remaining -= step
         gen_s = time.time() - t0
-        # out = input tail (17) + decoded(prefix 17 + new); keep only the new frames
-        new = np.asarray(out)[len(frames_in) + OVERLAP:][:want]
-        if len(new) == 0:
-            raise RuntimeError(f"pipeline returned {len(out)} frames, none after the prefix")
-        new = (np.clip(new, 0, 1) * 255).round().astype(np.uint8)
+        new = np.concatenate(chunks, axis=0)[:want]
         _write_video(new, output_path, FPS)
         torch.cuda.empty_cache()
         return {
@@ -156,7 +166,7 @@ class SkyReelsDFExtendService:
             "num_inference_steps": self.steps, "guidance_scale": self.guidance, "flow_shift": self.shift,
             "overlap_history": OVERLAP, "base_num_frames": BASE_FRAMES, "addnoise_condition": self.addnoise,
             "ar_step": 0, "fps": FPS, "resolution": f"{width}x{height}",
-            "num_frames_incl_prefix": num_frames, "generated_frames": int(len(new)),
+            "windows_num_frames_incl_prefix": windows, "generated_frames": int(len(new)),
             "prefix_frames_dropped": OVERLAP, "target_seconds": round(tgt_s, 3), "target_frames": need,
             "capped": capped, "max_seconds": self.max_seconds, "generation_seconds": round(gen_s, 2),
             "seed": seed, "audio_stripped": True,
