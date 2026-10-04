@@ -7,7 +7,7 @@ create_model_venv "$MODEL"
 activate_model_venv "$MODEL"
 pip install -q -r <(grep -v '^flash_attn==' "${REPOS_DIR}/Omni-Video/requirements.txt")
 pip install -q flash-attn==2.8.3 --no-build-isolation
-pip install -q "huggingface_hub[cli]"
+pip install -q "huggingface_hub[cli]" imageio-ffmpeg  # upstream cache_video passes quality=, which only the ffmpeg plugin accepts
 deactivate
 download_hf_checkpoint "Fudan-FUXI/OmniVideo2-A14B" "OmniVideo2-A14B"
 download_hf_checkpoint "Qwen/Qwen3-VL-30B-A3B-Instruct" "Qwen3-VL-30B-A3B-Instruct" "required VLM"
