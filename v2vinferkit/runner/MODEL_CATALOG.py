@@ -695,7 +695,7 @@ OR_BENCH_2026_10_MODELS = {
         "modality": "v2v",
         "deployment": "local",
         "capability": "video_continuation",
-        "description": "Open-Sora 2.0 11B v2v_tail extension at 256px; output = continuation only",
+        "description": "Open-Sora 2.0 11B extension at 256px: official v2v_head conditioning on the input's last 33 frames, 50 steps, <=129 frames (96 new @24 fps); output = continuation only",
         "family": "Open-Sora",
         "gpu": "1x80GB",
         "resolution": "256px",
