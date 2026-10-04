@@ -15,6 +15,19 @@ from .base import ModelWrapper
 from .local_utils import failed_result, repo_path, require_dir, require_file, run_command, success_result, weights_path
 
 
+def _probe_frames_fps(path):
+    import subprocess
+    try:
+        out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries",
+                              "stream=r_frame_rate,nb_read_frames", "-of", "json", str(path)],
+                             capture_output=True, text=True, check=True).stdout
+        st = json.loads(out)["streams"][0]
+        num, den = st["r_frame_rate"].split("/")
+        return int(st.get("nb_read_frames") or 0), float(num) / float(den)
+    except Exception:
+        return 0, 0.0
+
+
 class OmniVideo2Service:
     def __init__(self, model: str, task: str):
         self.model = model
@@ -44,6 +57,16 @@ class OmniVideo2Service:
         source = require_file(video_path, "source video")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         num_frames = max(1, min(int(num_frames), 81))
+        # Cover the whole source: the official reader takes frame_num frames every
+        # sampling_rate frames from the start, so derive the rate from the clip length and
+        # write the output at source_fps / rate (the edit then spans the source's duration).
+        src_frames, src_fps = _probe_frames_fps(source)
+        if src_frames:
+            num_frames = min(num_frames, src_frames)
+            num_frames = max(1, ((num_frames - 1) // 4) * 4 + 1)
+            sampling_rate = max(1, src_frames // num_frames)
+            if src_fps:
+                fps = max(1, round(src_fps / sampling_rate))
         num_frames = ((num_frames - 1) // 4) * 4 + 1
         sample_id = f"v2vinferkit_{time.time_ns()}"
         expected = repo / "outputs" / f"{source.stem}_id{sample_id}_edited.mp4"
@@ -78,7 +101,7 @@ class OmniVideo2Service:
             generated = require_file(expected, "OmniVideo2 output video")
             shutil.copy2(generated, output_path)
             generated.unlink()
-        return {"task": self.task, "checkpoint": str(checkpoint), "qwen_checkpoint": str(qwen), "num_frames": num_frames, "size": size, "num_inference_steps": num_inference_steps, "seed": seed, "fps": fps}
+        return {"task": self.task, "checkpoint": str(checkpoint), "qwen_checkpoint": str(qwen), "num_frames": num_frames, "source_frames": src_frames, "sampling_rate": sampling_rate, "size": size, "num_inference_steps": num_inference_steps, "seed": seed, "fps": fps}
 
 
 class OmniVideo2Wrapper(ModelWrapper):
