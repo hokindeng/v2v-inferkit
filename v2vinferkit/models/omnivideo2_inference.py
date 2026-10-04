@@ -97,7 +97,10 @@ class OmniVideo2Service:
                 "--sample_fps", str(fps),
                 "--sampling_rate", str(sampling_rate),
             ]
-            run_command(command, cwd=repo, timeout=timeout)
+            # the official launcher exports PYTHONPATH=<repo> (the omnivideo package is not installed)
+            env = {"PYTHONPATH": f"{repo}:{os.environ.get('PYTHONPATH', '')}".rstrip(":"),
+                   "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}
+            run_command(command, cwd=repo, timeout=timeout, env=env)
             generated = require_file(expected, "OmniVideo2 output video")
             shutil.copy2(generated, output_path)
             generated.unlink()
