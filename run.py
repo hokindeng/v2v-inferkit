@@ -75,6 +75,26 @@ def get_video_frame_count(video_path: str) -> Optional[int]:
     return None
 
 
+_DECODE_RISKY_CODECS = {"av1"}
+
+
+def _h264_copy_if_needed(video_path: str, dest: Path) -> Optional[Dict[str, str]]:
+    """Near-lossless H.264 copy of a source whose codec local stacks often cannot decode."""
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=codec_name", "-of", "csv=p=0", str(video_path)],
+                           capture_output=True, text=True)
+    codec = probe.stdout.strip()
+    if codec not in _DECODE_RISKY_CODECS:
+        return None
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if not dest.exists():
+        tmp = dest.with_suffix(".tmp.mp4")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(video_path), "-map", "0:v:0", "-c:v", "libx264",
+                        "-crf", "12", "-preset", "medium", "-pix_fmt", "yuv420p", "-an", str(tmp)], check=True)
+        tmp.rename(dest)
+    return {"path": str(dest), "from_codec": codec}
+
+
 def probe_geometry(video_path: str) -> Optional[Dict[str, Any]]:
     """width/height/fps/frames/duration, or None when the file is not a decodable video."""
     try:
@@ -229,6 +249,16 @@ def run_single_inference(
     if runner is None:
         runner = InferenceRunner(output_dir=str(output_dir))
 
+    # Local models decode with whatever their stack bundles (decord, torchvision, PyAV builds
+    # without dav1d); AV1 sources (one bench task) fail there, so they get a near-lossless
+    # H.264 copy. Hosted endpoints keep receiving the original file.
+    transcoded = None
+    if AVAILABLE_MODELS.get(model_name, {}).get("deployment") == "local" and Path(video_path).exists():
+        transcoded = _h264_copy_if_needed(video_path, output_dir / "_inputs" / f"{task_id}.mp4")
+        if transcoded:
+            video_path = transcoded["path"]
+            log(f"    Input transcoded {transcoded['from_codec']} -> h264: {video_path}")
+
     generation_kwargs: Dict[str, Any] = {"video_path": video_path}
     if task.get("num_frames") is not None:
         generation_kwargs["num_frames"] = task["num_frames"]
@@ -263,6 +293,10 @@ def run_single_inference(
             result["status"] = "failed"
             result["error"] = "output failed validation (not a decodable video)"
 
+    if transcoded:
+        result.setdefault("metadata", {})
+        if isinstance(result["metadata"], dict):
+            result["metadata"]["input_transcoded"] = f"{transcoded['from_codec']} -> h264 (crf 12)"
     result.update({
         "task_id": task_id,
         "category": category,
